@@ -1,0 +1,8 @@
+# 学習資料生成スキル用の作業ディレクトリ（資料群ごとに作成される）
+workspace/
+
+# macOS
+.DS_Store
+
+# Node
+node_modules/
