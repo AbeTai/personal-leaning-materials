@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Snowflakeクラスタリングと検索最適化サービス</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="hero">
+    <div class="wrap">
+      <a class="back-link" href="../">教材一覧へ</a>
+      <p class="eyebrow">Snowflake Performance Tuning</p>
+      <h1>Snowflakeクラスタリングと検索最適化サービスの使い分け</h1>
+      <p class="lead">10億件級のテーブルで検索を速くするために、マイクロパーティション、クラスタリングキー、検索最適化サービスを判断軸として整理する教材です。</p>
+      <dl class="meta">
+        <div>
+          <dt>対象</dt>
+          <dd>Snowflakeの基本SQLを使えるデータエンジニア</dd>
+        </div>
+        <div>
+          <dt>作成日</dt>
+          <dd>2026-07-12</dd>
+        </div>
+        <div>
+          <dt>元記事</dt>
+          <dd><a href="https://zenn.dev/estie/articles/45b569b84a5617">estie テックブログ / Zenn</a></dd>
+        </div>
+      </dl>
+    </div>
+  </header>
+
+  <main class="wrap content">
+    <section class="section" id="goals">
+      <h2>この教材で学べること</h2>
+      <div class="goal-grid">
+        <article>
+          <h3>なぜ検索が遅くなるか</h3>
+          <p>巨大テーブルでは、読み込むマイクロパーティション数が応答時間を大きく左右します。</p>
+        </article>
+        <article>
+          <h3>クラスタリングキーの効きどころ</h3>
+          <p>よく使う絞り込み列や式にデータの局所性を寄せる考え方を学びます。</p>
+        </article>
+        <article>
+          <h3>検索最適化サービスの判断軸</h3>
+          <p>クラスタリングキーだけでは拾いにくい検索パターンへの使い方を整理します。</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="prerequisites">
+      <h2>前提知識</h2>
+      <ul class="check-list">
+        <li>Snowflakeでテーブルを作成し、`SELECT ... WHERE` を実行できる</li>
+        <li>等値検索、範囲検索、カーディナリティという用語を聞いたことがある</li>
+        <li>Query Profileで実行時間や読み込み量を確認する目的が分かる</li>
+      </ul>
+    </section>
+
+    <section class="section" id="roadmap">
+      <h2>学習ロードマップ</h2>
+      <ol class="roadmap">
+        <li>
+          <span>Phase 1</span>
+          <strong>マイクロパーティションとプルーニングを押さえる</strong>
+          <p>Snowflakeが不要なパーティションを読み飛ばせる条件を理解します。</p>
+        </li>
+        <li>
+          <span>Phase 2</span>
+          <strong>クラスタリングキーで局所性を作る</strong>
+          <p>検索条件に合うようにデータ配置を寄せる設計を学びます。</p>
+        </li>
+        <li>
+          <span>Phase 3</span>
+          <strong>検索最適化サービスで点検索を補う</strong>
+          <p>検索アクセスパスを使うべき検索パターンを見極めます。</p>
+        </li>
+        <li>
+          <span>Phase 4</span>
+          <strong>適用判断を言語化する</strong>
+          <p>性能、コスト、メンテナンスの観点で使い分けを決めます。</p>
+        </li>
+      </ol>
+    </section>
+
+    <section class="section concept" id="micro-partitions">
+      <p class="section-label">Concept 1</p>
+      <h2>マイクロパーティションは「読み飛ばせるか」が重要</h2>
+      <p>Snowflakeはテーブルをマイクロパーティションに分け、それぞれに列値の範囲などのメタデータを持たせます。クエリ条件に合わないと判断できるパーティションは読まれず、これがプルーニングです。</p>
+      <div class="example">
+        <h3>具体例</h3>
+        <p>日付順に投入されたデータでは、日付条件は読み飛ばしやすい一方、顧客IDや価格のように投入順と関係が薄い列では、多くのパーティションを読む可能性があります。</p>
+      </div>
+      <div class="key-point">
+        <strong>判断の軸:</strong> その検索条件で、Snowflakeが「読まなくてよい範囲」をメタデータから判断できるか。
+      </div>
+      <div class="quiz">
+        <h3>理解チェック</h3>
+        <p>同じテーブルでも、日付検索は速く、顧客ID検索は遅いことがあります。どちらの列が投入順やデータ配置と相性がよいかを確認してください。</p>
+      </div>
+    </section>
+
+    <section class="section concept" id="clustering">
+      <p class="section-label">Concept 2</p>
+      <h2>クラスタリングキーは、よく使う検索条件にデータ配置を寄せる</h2>
+      <p>クラスタリングキーを指定すると、Snowflakeの自動クラスタリングがバックグラウンドでマイクロパーティションの配置を整えます。よく使う`WHERE`条件とキーが合っているほど、プルーニングが効きやすくなります。</p>
+      <pre><code>alter table orders
+  cluster by (date_trunc(month, o_orderdate), round(o_totalprice, -4));</code></pre>
+      <div class="example">
+        <h3>具体例</h3>
+        <p>`o_orderdate`と`o_totalprice`でよく絞り込むなら、その列をそのまま使うのではなく、月単位や価格帯に丸めて粒度を調整します。粒度が粗すぎると絞れず、細かすぎると配置が安定しにくくなります。</p>
+      </div>
+      <div class="key-point">
+        <strong>判断の軸:</strong> 何度も使われる範囲検索や複合条件があり、粒度を調整できる列・式か。
+      </div>
+      <div class="quiz">
+        <h3>理解チェック</h3>
+        <p>クラスタリングキーに高カーディナリティなIDをそのまま入れる前に、値をまとめる式や別の検索条件で代替できないか考えてください。</p>
+      </div>
+    </section>
+
+    <section class="section concept" id="search-optimization">
+      <p class="section-label">Concept 3</p>
+      <h2>検索最適化サービスは、少数ヒットの探索に強い</h2>
+      <p>検索最適化サービスは、通常のマイクロパーティションメタデータとは別に検索アクセスパスを構築します。クラスタリングキーとは異なる列、全文検索、半構造化データ、地理空間検索などに使えます。</p>
+      <pre><code>alter table orders
+  add search optimization on equality(o_custkey);</code></pre>
+      <div class="example">
+        <h3>具体例</h3>
+        <p>顧客IDの等値検索のように、条件に合う行が少ない検索では、検索アクセスパスによって読むパーティションを大きく減らせます。一方、ヒット件数が多い条件では効果が薄くなります。</p>
+      </div>
+      <div class="key-point">
+        <strong>判断の軸:</strong> 条件に合う行が少なく、クラスタリングキーに入れにくい列や式か。
+      </div>
+      <div class="quiz">
+        <h3>理解チェック</h3>
+        <p>建物名やIDで一点検索する画面と、広い価格帯で一覧する画面では、どちらが検索最適化サービスに向いているか説明してください。</p>
+      </div>
+    </section>
+
+    <section class="section" id="comparison">
+      <h2>使い分け早見表</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>観点</th>
+              <th>クラスタリングキー</th>
+              <th>検索最適化サービス</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>向く検索</td>
+              <td>頻出する範囲検索、複合条件</td>
+              <td>少数ヒットの等値検索、全文検索、半構造化検索</td>
+            </tr>
+            <tr>
+              <td>効き方</td>
+              <td>データ配置を整えてプルーニングしやすくする</td>
+              <td>検索アクセスパスで対象パーティションを見つける</td>
+            </tr>
+            <tr>
+              <td>注意点</td>
+              <td>キーの粒度設計が必要</td>
+              <td>Enterprise Edition以上と追加ストレージを考慮する</td>
+            </tr>
+            <tr>
+              <td>確認方法</td>
+              <td>`SYSTEM$CLUSTERING_INFORMATION` と Query Profile</td>
+              <td>`SHOW TABLES` の進捗・容量と Query Profile</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" id="decision">
+      <h2>適用判断の手順</h2>
+      <ol class="steps">
+        <li>遅いクエリの`WHERE`条件とQuery Profileを確認する。</li>
+        <li>読み込んでいるパーティション数が多いかを見る。</li>
+        <li>頻出する範囲検索ならクラスタリングキーの粒度を設計する。</li>
+        <li>少数ヒットの探索なら検索最適化サービスを検討する。</li>
+        <li>改善後もコスト、ストレージ、メンテナンスの増加を確認する。</li>
+      </ol>
+    </section>
+
+    <section class="section" id="summary">
+      <h2>まとめ</h2>
+      <p>巨大テーブルの検索性能は、どれだけ不要なマイクロパーティションを読まずに済むかで大きく変わります。クラスタリングキーは頻出検索に合わせてデータ配置を整える手段で、検索最適化サービスはクラスタリングだけでは対応しにくい少数ヒットの探索を補う手段です。</p>
+      <p>最初にクエリパターンを観察し、次にパーティション読み込み量を確認し、最後にコストを含めて適用する。この順序で考えると、機能名からではなく、検索の性質からチューニングを選べます。</p>
+    </section>
+
+    <section class="section references" id="references">
+      <h2>参照資料</h2>
+      <ul>
+        <li><a href="https://zenn.dev/estie/articles/45b569b84a5617">Snowflake クラスタリングと検索最適化サービスとの付き合いかた</a>（Ryosuke Lin, estie テックブログ, 2026-04-06）</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>
