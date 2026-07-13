@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>uv initでモノレポの親pyproject.tomlが書き換わる問題</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="hero">
+    <div class="wrap">
+      <a class="back-link" href="../">教材一覧へ</a>
+      <p class="eyebrow">Python Tooling &amp; Monorepo</p>
+      <h1>uv initしたら親のpyproject.tomlが勝手に書き換わった話</h1>
+      <p class="lead">モノレポのサブディレクトリで<code>uv init</code>を実行すると、なぜ親の<code>pyproject.toml</code>がワークスペースとして書き換わるのか。検出の仕組み・実務での回避策・モノレポ設計への応用まで踏み込んで整理する教材です。</p>
+      <dl class="meta">
+        <div>
+          <dt>対象</dt>
+          <dd>uvの基本コマンド（uv init/add/run）は使ったことがあるPython開発者</dd>
+        </div>
+        <div>
+          <dt>作成日</dt>
+          <dd>2026-07-13</dd>
+        </div>
+        <div>
+          <dt>元記事</dt>
+          <dd><a href="https://zenn.dev/zaspa/articles/484f0a74a416b4">uv initしたら親のpyproject.tomlが勝手に書き換わった話（zaspa, Zenn）</a></dd>
+        </div>
+      </dl>
+    </div>
+  </header>
+
+  <main class="wrap content">
+    <section class="section" id="goals">
+      <h2>この教材で学べること</h2>
+      <div class="goal-grid">
+        <article>
+          <h3>何が起きたか</h3>
+          <p>モノレポでbackendを独立化しようとした際に、なぜ親の設定が書き換わったのかを再現します。</p>
+        </article>
+        <article>
+          <h3>ワークスペース検出の仕組み</h3>
+          <p>uvが親ディレクトリのどこまで、何を根拠に探索するのかを公式ドキュメントで確認します。</p>
+        </article>
+        <article>
+          <h3>実務での回避策と設計判断</h3>
+          <p><code>--no-workspace</code>の使い方、既存メンバーの外し方、モノレポ設計そのものの判断基準まで扱います。</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="prerequisites">
+      <h2>前提知識の確認</h2>
+      <ul class="check-list">
+        <li><code>uv init</code> / <code>uv add</code> / <code>uv run</code> など、uvの基本コマンドを使ったことがある</li>
+        <li><code>pyproject.toml</code>がPythonプロジェクトの設定ファイルであることを知っている</li>
+        <li>モノレポ（1つのリポジトリに複数のサービス・パッケージを置く構成）という言葉の意味が分かる</li>
+      </ul>
+    </section>
+
+    <section class="section" id="roadmap">
+      <h2>学習ロードマップ</h2>
+      <ol class="roadmap">
+        <li>
+          <span>Phase 1</span>
+          <strong>何が起きたのかをディレクトリ構造で再現する</strong>
+          <p>モノレポの<code>backend/</code>で<code>uv init</code>した結果、ルートの<code>pyproject.toml</code>がどう変化するかを確認します。</p>
+        </li>
+        <li>
+          <span>Phase 2</span>
+          <strong>uvのワークスペース自動検出の仕組みを理解する</strong>
+          <p>公式ドキュメントの記載をもとに、uvが何を根拠に親ディレクトリを検出しているかを確認します。</p>
+        </li>
+        <li>
+          <span>Phase 3</span>
+          <strong>実務での回避策・対処法を身につける</strong>
+          <p><code>--no-workspace</code>での初期化、既にメンバーになってしまった場合の外し方を確認します。</p>
+        </li>
+        <li>
+          <span>Phase 4</span>
+          <strong>モノレポ設計そのものの判断基準に応用する</strong>
+          <p>ワークスペースを使うべきケースと、独立プロジェクト（Docker個別化）にすべきケースを整理します。</p>
+        </li>
+      </ol>
+    </section>
+
+    <section class="section concept" id="reproduce">
+      <p class="section-label">Concept 1</p>
+      <h2>何が起きたか：ディレクトリ構造で再現する</h2>
+      <p>モノレポのルートに<code>pyproject.toml</code>があり、その配下の<code>backend/</code>ディレクトリで独立したPythonプロジェクトを作ろうとしたケースです。</p>
+      <pre><code>monorepo/
+├── pyproject.toml        ← 既存のルート設定（この時点ではワークスペースではない）
+└── dev/
+    └── backend/           ← ここで uv init を実行したい
+</code></pre>
+      <p><code>dev/backend/</code>で<code>uv init</code>を実行すると、uvはルートの<code>pyproject.toml</code>を検出し、以下のように書き換えます。</p>
+      <pre><code># 実行前のルート pyproject.toml には無かったものが追加される
+[tool.uv.workspace]
+members = ["dev/backend"]
+</code></pre>
+      <div class="example">
+        <h3>具体例</h3>
+        <p>著者が意図していたのは「<code>backend</code>を独立したDockerイメージとしてビルドし、他のサービスと依存関係を共有しない」構成でした。しかし実際には、ルートの<code>pyproject.toml</code>が勝手にワークスペースの親（ルート）として扱われ、<code>backend</code>がその一員として登録されてしまいました。</p>
+      </div>
+      <div class="key-point">
+        <strong>判断の軸:</strong> サブディレクトリでの<code>uv init</code>は「そのディレクトリだけの初期化」ではなく、「親も含めたプロジェクト全体構造への変更」になり得ることを前提に扱う必要がある。
+      </div>
+      <div class="quiz">
+        <h3>理解チェック</h3>
+        <p>ルートに<code>pyproject.toml</code>が存在しない状態で<code>dev/backend/</code>で<code>uv init</code>した場合も、同じ問題は起きるでしょうか。「親ディレクトリの探索」が何を見つけたときに発動するのかを考えて説明してください。</p>
+      </div>
+    </section>
+
+    <section class="section concept" id="detection">
+      <p class="section-label">Concept 2</p>
+      <h2>ワークスペース自動検出の仕組み</h2>
+      <p>uv公式ドキュメント（docs.astral.sh）には、この挙動について次のように明記されています。</p>
+      <div class="example">
+        <h3>公式ドキュメントの記載</h3>
+        <p>"By default, running <code>uv init</code> inside an existing package will add the newly created member to the workspace, creating a <code>tool.uv.workspace</code> table in the workspace root if it doesn't already exist."</p>
+        <p>さらにプロジェクト探索全般について: "All <code>pyproject.toml</code>, <code>uv.toml</code>, and <code>.python-version</code> files will be discovered by walking up the directory tree from the project root, as will the project's virtual environment (<code>.venv</code>)."</p>
+      </div>
+      <p>つまりuvは、現在のディレクトリから親方向へ<strong>ディレクトリツリーを遡って</strong>、<code>pyproject.toml</code>・<code>uv.toml</code>・<code>.python-version</code>・<code>.venv</code>を探索します。親に<code>pyproject.toml</code>が見つかると、そこが「ワークスペースのルート」とみなされ、今回作成したプロジェクトが自動的にそのメンバーとして登録されます。</p>
+      <div class="key-point">
+        <strong>判断の軸:</strong> 「親ディレクトリに<code>pyproject.toml</code>が存在するかどうか」が、ワークスペース自動登録が発動するかどうかの分岐点。存在しなければ、通常は独立プロジェクトとして初期化される。
+      </div>
+      <div class="quiz">
+        <h3>理解チェック</h3>
+        <p>もしモノレポのルートに<code>pyproject.toml</code>ではなく<code>uv.toml</code>だけが置かれていた場合、同じ探索ロジックによってワークスペース化が起きると考えられますか。上の引用のどの部分から判断できるか答えてください。</p>
+      </div>
+    </section>
+
+    <section class="section concept" id="workaround">
+      <p class="section-label">Concept 3</p>
+      <h2>実務での回避策・対処法</h2>
+      <p>回避策は大きく2パターンあります。「これから作るとき」と「すでにワークスペースに組み込まれてしまったとき」です。</p>
+      <pre><code># パターン1: これから作る場合は --no-workspace を付ける
+cd dev/backend
+uv init --no-workspace</code></pre>
+      <p>公式ドキュメントでの<code>--no-workspace</code>の説明: "Avoid discovering a workspace and create a standalone project. By default, uv searches for workspaces in the current directory or any parent directory."</p>
+      <pre><code># パターン2: すでにメンバーとして登録されてしまった場合
+# ルートの pyproject.toml から該当メンバーを exclude するか、members から取り除く
+
+[tool.uv.workspace]
+members = ["packages/*"]
+exclude = ["dev/backend"]   # 個別に除外する場合
+</code></pre>
+      <div class="example">
+        <h3>具体例</h3>
+        <p>すでに<code>members</code>に<code>dev/backend</code>が追加され、ルートの<code>uv.lock</code>にbackendの依存関係が混ざってしまっている場合は、<code>exclude</code>で除外したあとに、<code>dev/backend</code>ディレクトリで改めて<code>uv init --no-workspace</code>（または手動で独立した<code>pyproject.toml</code>を用意）し、<code>uv lock</code>をそのディレクトリ単体で実行し直す必要があります。</p>
+      </div>
+      <div class="key-point">
+        <strong>判断の軸:</strong> 「作る前に防ぐ」なら<code>--no-workspace</code>、「すでに混ざってしまった状態を分離する」なら<code>exclude</code>設定とロックファイルの作り直しの2段階が必要。
+      </div>
+      <div class="quiz">
+        <h3>理解チェック</h3>
+        <p><code>exclude</code>だけを設定して、<code>dev/backend</code>ディレクトリに独自の<code>uv.lock</code>を作り直さなかった場合、何が起きると考えられますか。「ロックファイルがどこにあるか」という観点で説明してください。</p>
+      </div>
+    </section>
+
+    <section class="section concept" id="shared-resources">
+      <p class="section-label">Concept 4</p>
+      <h2>ロックファイル・仮想環境はどこまで共有されるか</h2>
+      <p>ワークスペースの本質的な特徴は「設定ファイルは個別、実行環境は共有」という点です。公式ドキュメントには次のようにあります。</p>
+      <div class="example">
+        <h3>公式ドキュメントの記載</h3>
+        <p>"in a workspace, each package defines its own <code>pyproject.toml</code>, but the workspace shares a single lockfile, ensuring that the workspace operates with a consistent set of dependencies."</p>
+      </div>
+      <p>つまり、各メンバーは自分の依存関係を<code>pyproject.toml</code>に書けますが、実際にインストールされるバージョンを固定する<code>uv.lock</code>はワークスペース全体で1つだけです。同様に、仮想環境（<code>.venv</code>）もワークスペースルートに1つだけ作られ、全メンバーで共有されます（ディレクトリツリーの探索で<code>.venv</code>も遡って発見される、という前述の記載と対応します）。</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>リソース</th>
+              <th>ワークスペース</th>
+              <th>独立プロジェクト（<code>--no-workspace</code>）</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>pyproject.toml</code></td>
+              <td>メンバーごとに個別</td>
+              <td>個別</td>
+            </tr>
+            <tr>
+              <td><code>uv.lock</code></td>
+              <td>ワークスペース全体で1つ</td>
+              <td>プロジェクトごとに個別</td>
+            </tr>
+            <tr>
+              <td><code>.venv</code></td>
+              <td>ワークスペースルートに1つ、共有</td>
+              <td>プロジェクトごとに個別</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="key-point">
+        <strong>判断の軸:</strong> 「同じバージョンの依存関係で統一したいか」「Dockerイメージを完全に分離したいか」で、ワークスペースの共有特性が有利にも不利にもなる。
+      </div>
+      <div class="quiz">
+        <h3>理解チェック</h3>
+        <p>backendとfrontendサービスが同じワークスペースに属していて、backendだけが特定ライブラリの新バージョンを必要とする場合、共有ロックファイルはどのような制約を生みますか。</p>
+      </div>
+    </section>
+
+    <section class="section concept" id="monorepo-design">
+      <p class="section-label">Concept 5</p>
+      <h2>モノレポ設計への応用：ワークスペースを使うべきか</h2>
+      <p>元記事の結論は「共有コード・統一依存管理をしたいならワークスペース、独立Dockerデプロイをしたいなら独立プロジェクト」というものでした。これをチェックリスト化すると実務判断がしやすくなります。</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>観点</th>
+              <th>ワークスペースが向く</th>
+              <th>独立プロジェクトが向く</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>パッケージ間の依存</td>
+              <td>共通ライブラリを複数サービスが参照する</td>
+              <td>サービス間で依存関係を共有しない</td>
+            </tr>
+            <tr>
+              <td>デプロイ単位</td>
+              <td>まとめてデプロイ、または依存関係を揃えたい</td>
+              <td>サービスごとに個別のDockerイメージ</td>
+            </tr>
+            <tr>
+              <td>CI/CD</td>
+              <td>統一的なテスト・ビルドパイプライン</td>
+              <td>サービスごとに最適化された軽量ビルド</td>
+            </tr>
+            <tr>
+              <td>依存バージョン管理</td>
+              <td>全メンバーで統一したい</td>
+              <td>サービスごとに独立して更新したい</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="key-point">
+        <strong>判断の軸:</strong> 「複数サービス間でコード・依存を共有する必要があるか」を最初に問い、必要ないなら<code>uv init --no-workspace</code>を既定にしておくと、今回のような意図しない書き換えを防げる。
+      </div>
+    </section>
+
+    <section class="section concept" id="checklist">
+      <p class="section-label">Concept 6</p>
+      <h2>実務チェックリスト：新しいディレクトリでuvを使う前に</h2>
+      <ol class="steps">
+        <li>今からPythonプロジェクトを作るディレクトリの親方向に、<code>pyproject.toml</code>・<code>uv.toml</code>が存在しないか確認する（<code>ls</code>や<code>find .. -maxdepth 3 -name pyproject.toml</code>など）。</li>
+        <li>親に設定ファイルがあり、かつ依存関係やロックファイルを共有したくない場合は、必ず<code>uv init --no-workspace</code>を使う。</li>
+        <li>実行後、親の<code>pyproject.toml</code>に差分が出ていないか<code>git diff</code>で確認する。</li>
+        <li>Dockerで個別コンテナ化する予定のサービスは、独立プロジェクトとして<code>.venv</code>・<code>uv.lock</code>が専用に作られているかを確認する。</li>
+        <li>すでに意図せずワークスペースに組み込まれていた場合は、<code>exclude</code>設定とロックファイルの作り直しで分離する。</li>
+      </ol>
+      <div class="example">
+        <h3>具体例：差分確認コマンド</h3>
+        <pre><code>cd dev/backend
+uv init --no-workspace
+cd ../..
+git status
+git diff pyproject.toml   # ルートのpyproject.tomlが変化していないことを確認</code></pre>
+      </div>
+    </section>
+
+    <section class="section" id="comparison">
+      <h2>使い分け早見表</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>観点</th>
+              <th>デフォルト（ワークスペース自動検出）</th>
+              <th><code>--no-workspace</code></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>ルート<code>pyproject.toml</code>への影響</td>
+              <td><code>[tool.uv.workspace]</code>にメンバー追加され書き換わる</td>
+              <td>変更なし</td>
+            </tr>
+            <tr>
+              <td>ロックファイル</td>
+              <td>ワークスペース全体で統合管理（1つ）</td>
+              <td>プロジェクトごとに個別作成</td>
+            </tr>
+            <tr>
+              <td>仮想環境</td>
+              <td>ワークスペースルートで共有</td>
+              <td>独立</td>
+            </tr>
+            <tr>
+              <td>向いているケース</td>
+              <td>共有コード・統一依存管理をしたいモノレポ</td>
+              <td>独立してDocker化したいマイクロサービス構成</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" id="decision">
+      <h2>適用判断の手順</h2>
+      <ol class="steps">
+        <li>新しいPythonサービス・パッケージを追加するディレクトリの親方向に既存の<code>pyproject.toml</code>がないか確認する。</li>
+        <li>他サービスとの依存共有・統一デプロイが必要かを整理する。</li>
+        <li>必要なければ<code>uv init --no-workspace</code>で初期化し、<code>git diff</code>でルート設定への影響がないことを確認する。</li>
+        <li>必要ならワークスペースのままにし、共有ロックファイル・共有<code>.venv</code>が意図通りかを確認する。</li>
+        <li>誤ってワークスペースに組み込まれていた場合は<code>exclude</code>設定と個別ロックファイルの作り直しで分離する。</li>
+      </ol>
+    </section>
+
+    <section class="section" id="summary">
+      <h2>まとめ・次のステップ</h2>
+      <p>uvはサブディレクトリで<code>uv init</code>を実行した際、親方向にディレクトリツリーを遡って<code>pyproject.toml</code>などを探索し、見つかった場合はデフォルトでそこをワークスペースルートとして扱い、新規プロジェクトをメンバーとして自動登録します。この挙動自体は「複数パッケージで依存関係を統一管理したい」場合には便利ですが、独立したDockerサービスとして分離したい場合には意図しない書き換えとして表面化します。<code>--no-workspace</code>フラグはこの自動検出を明示的に無効化するもので、実務では「親にpyproject.tomlがあるかどうか」を初期化前に確認する習慣と組み合わせることで、今回のような問題を未然に防げます。</p>
+      <p>次のステップとしては、実際に自分の手元でモノレポ構造を再現し、ワークスペースあり・なしそれぞれで<code>uv init</code>を実行して<code>git diff</code>と<code>.venv</code>・<code>uv.lock</code>の場所を見比べてみることをおすすめします。余裕があれば、<code>exclude</code>設定を使って既存メンバーを分離する手順も試してみてください。</p>
+    </section>
+
+    <section class="section references" id="references">
+      <h2>参照資料</h2>
+      <ul>
+        <li><a href="https://zenn.dev/zaspa/articles/484f0a74a416b4">uv initしたら親のpyproject.tomlが勝手に書き換わった話</a>（zaspa, Zenn, 2026-04-15）</li>
+        <li><a href="https://docs.astral.sh/uv/concepts/projects/workspaces/">Using workspaces | uv - Astral Docs</a></li>
+        <li><a href="https://docs.astral.sh/uv/reference/cli/">Commands | uv - Astral Docs</a>（<code>uv init --no-workspace</code> の説明を参照）</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>
