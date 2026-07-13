@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DID・ANCOVAデザインでのA/Bテスト分析</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="hero">
+    <div class="wrap">
+      <a class="back-link" href="../">教材一覧へ</a>
+      <p class="eyebrow">A/B Testing &amp; Causal Inference</p>
+      <h1>特殊なユーザーの影響を取り除く：DID・ANCOVAデザインでのA/Bテスト</h1>
+      <p class="lead">ヘビーユーザーの影響でA/Bテストの効果判定がぶれてしまう問題に対し、DID（差分の差分析）とANCOVA（共分散分析）を数式・理論的背景・実装コードまで踏み込んで整理する教材です。</p>
+      <dl class="meta">
+        <div>
+          <dt>対象</dt>
+          <dd>業務でA/Bテスト分析に携わり、t検定などの基礎統計とDIDの実務経験があるデータ分析者</dd>
+        </div>
+        <div>
+          <dt>作成日</dt>
+          <dd>2026-07-13</dd>
+        </div>
+        <div>
+          <dt>元記事</dt>
+          <dd><a href="https://note.com/abogadoron/n/n0ee6c04ee471">特殊なユーザーの影響を取り除く：DIDやANCOVAデザインでのA/Bテスト（Ito Hirotake, note）</a></dd>
+        </div>
+      </dl>
+    </div>
+  </header>
+
+  <main class="wrap content">
+    <section class="section" id="goals">
+      <h2>この教材で学べること</h2>
+      <div class="goal-grid">
+        <article>
+          <h3>ノーマル分析が壊れる理由</h3>
+          <p>ヘビーユーザーの割当偏りが、なぜ効果判定を歪めるのかを数式で理解します。</p>
+        </article>
+        <article>
+          <h3>DIDとANCOVAの数式と関係</h3>
+          <p>2つの設計がベースラインをどう使うか、条件付き分散の視点で比較します。</p>
+        </article>
+        <article>
+          <h3>ρに基づく使い分けと実装</h3>
+          <p>自己相関ρと分散削減の理論、Pythonでの実装、実務判断の手順まで扱います。</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="prerequisites">
+      <h2>前提知識の確認</h2>
+      <ul class="check-list">
+        <li>回帰分析（最小二乗法）の基本的な考え方が分かる</li>
+        <li>A/Bテストで Treatment群 / Control群 を比較した経験がある</li>
+        <li>分散・共分散・相関係数という用語の意味が分かる</li>
+      </ul>
+      <p>この教材はすでにDIDを使った経験がある方を想定しているため、DIDの基礎説明は簡潔にし、ANCOVAとの理論的な関係や実装に重点を置いています。</p>
+    </section>
+
+    <section class="section" id="roadmap">
+      <h2>学習ロードマップ</h2>
+      <ol class="roadmap">
+        <li>
+          <span>Phase 1</span>
+          <strong>ヘビーユーザー問題とノーマル分析の限界を数式で確認する</strong>
+          <p>なぜ介入後の値だけを比較する分析が割当の偏りに弱いのかを理解します。</p>
+        </li>
+        <li>
+          <span>Phase 2</span>
+          <strong>DIDとANCOVAの数式を比較し、条件付き分散の視点で捉え直す</strong>
+          <p>ベースラインY0の使い方の違いを、回帰式とノイズ低減の仕組みとして整理します。</p>
+        </li>
+        <li>
+          <span>Phase 3</span>
+          <strong>自己相関ρと分散削減の理論的背景を深掘りする</strong>
+          <p>Frison &amp; Pocock (1992) やCUPEDの枠組みから、記事の「使い分け」を理論的に裏付けます。</p>
+        </li>
+        <li>
+          <span>Phase 4</span>
+          <strong>Pythonでの実装と実務判断の手順に落とし込む</strong>
+          <p>statsmodelsでの実装例と、自分のデータで判断するためのチェックリストを確認します。</p>
+        </li>
+      </ol>
+    </section>
+
+    <section class="section concept" id="normal-limits">
+      <p class="section-label">Concept 1</p>
+      <h2>ノーマル分析はなぜヘビーユーザーに引きずられるか</h2>
+      <p>もっとも単純な分析は、介入後の値 <code>Y1</code>（例: 課金額、利用時間）をTreatment/Controlで比較する回帰式です。</p>
+      <pre><code>Y1 = a + b・Treat + 誤差   （ノーマルな方法）</code></pre>
+      <p>この式は、ユーザーごとの「もともとの水準」を一切考慮しません。課金額のようにヘビーユーザーの値が極端に大きい指標では、Treatment群・Control群のどちらに高額課金者がたまたま多く割り当てられたかによって、係数 <code>b</code>（施策効果の推定値）が大きくぶれます。</p>
+      <div class="example">
+        <h3>具体例</h3>
+        <p>ランダム割当をしていても、サンプルサイズが有限であれば「たまたま」高額課金者がTreatment群に偏ることは起こり得ます。その場合、施策に効果がなくても <code>b</code> が正に見えたり、逆に本当の効果が打ち消されたりします。</p>
+      </div>
+      <div class="key-point">
+        <strong>判断の軸:</strong> 目的変数の分散の大部分が「個人差（ユーザー固有の水準）」に由来していないか。由来している場合、ノーマル分析はその個人差ノイズをそのまま効果推定のノイズとして引き継ぐ。
+      </div>
+      <div class="quiz">
+        <h3>理解チェック</h3>
+        <p>課金額の代わりに「ログイン有無（0/1）」を目的変数にした場合、ヘビーユーザー問題は同じ深刻さで発生するでしょうか。指標の分散の偏り方の違いから理由を説明してください。</p>
+      </div>
+    </section>
+
+    <section class="section concept" id="did">
+      <p class="section-label">Concept 2</p>
+      <h2>DID（差分の差分析）：個人内の変化量に着目する</h2>
+      <p>DIDは、介入前のベースライン測定 <code>Y0</code> を使い、目的変数を「変化量」に置き換えます。</p>
+      <pre><code>(Y1 − Y0) = a + b・Treat + 誤差   （DID）</code></pre>
+      <p>ヘビーユーザーであっても、その人自身の <code>Y0</code> を基準にするため、比較されるのは「その人の中でどれだけ変化したか」です。これにより、ユーザー固有の水準（絶対値の大きさ）そのものは差分の計算で相殺されます。</p>
+      <div class="example">
+        <h3>具体例</h3>
+        <p>介入前に月10万円課金していたユーザーが介入後に11万円になった場合の変化量は+1万円です。介入前に月1,000円だったユーザーが介入後に2,000円になった場合も変化量は+1,000円で、絶対額は全く違いますが「変化」という土俵で比較できます。</p>
+      </div>
+      <div class="key-point">
+        <strong>判断の軸:</strong> ベースラインとフォローアップの間で、ユーザーの相対的な順位や水準がある程度安定している（自己相関ρが高い）ほど、DIDの単純な差分は分散を小さくしやすい。
+      </div>
+      <div class="quiz">
+        <h3>理解チェック</h3>
+        <p>DIDの式は暗黙に「<code>Y0</code>の係数は1」という制約を置いています（<code>Y1-Y0</code>は<code>Y1 = a + b・Treat + 1・Y0 + 誤差</code>と同じ形）。この制約が現実のデータに合わない場合、何が起きると考えられますか。</p>
+      </div>
+    </section>
+
+    <section class="section concept" id="ancova">
+      <p class="section-label">Concept 3</p>
+      <h2>ANCOVA（共分散分析）：係数θをデータから推定する</h2>
+      <p>ANCOVAはDIDの「係数1」という制約を外し、ベースライン<code>Y0</code>を共変量として回帰式に含め、その係数<code>θ</code>を最小二乗法で推定します。</p>
+      <pre><code>Y1 = a + b・Treat + θ・Y0 + 誤差   （ANCOVA）</code></pre>
+      <p>θ=1に固定するとDIDと一致し、θ=0に固定するとノーマルな方法と一致します。ANCOVAはθをデータから推定するため、DIDともノーマルな方法とも異なる「その中間の最適な重み」を自動的に選びます。</p>
+      <div class="example">
+        <h3>具体例</h3>
+        <p>ランダム化されたA/Bテストでは<code>Treat</code>と<code>Y0</code>は無相関（<code>Treat</code>はランダム割当のため）なので、θの推定値はおおよそ<code>Y0</code>と<code>Y1</code>の相関構造から決まります。相関が強いデータではθは1に近づき（DIDに近い挙動）、相関が弱いデータではθは0に近づきます（ノーマルな方法に近い挙動）。</p>
+      </div>
+      <div class="key-point">
+        <strong>判断の軸:</strong> 「DIDにすべきかノーマルにすべきか」を人手で決め打ちせず、θという1つのパラメータにデータから語らせる設計がANCOVA。
+      </div>
+      <div class="quiz">
+        <h3>理解チェック</h3>
+        <p>ある実験でθの推定値が0.05だったとします。これはベースラインと介入後の値の関係についてどのようなことを示唆しますか。この場合、DIDを使うとどうなると考えられますか。</p>
+      </div>
+    </section>
+
+    <section class="section concept" id="why-noise-reduces">
+      <p class="section-label">Concept 4</p>
+      <h2>なぜベースラインを使うとノイズが減るのか：条件付き分散で理解する</h2>
+      <p><code>Y0</code>と<code>Y1</code>が同じ分散<code>σ²</code>を持ち、相関係数<code>ρ</code>で結びついていると仮定します（ランダム化により<code>Treat</code>は<code>Y0</code>と無相関）。このとき、施策効果の推定に使われる「残差の分散」は分析デザインごとに次のようになります。</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>分析デザイン</th>
+              <th>効果推定に使う残差の分散</th>
+              <th>解釈</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>ノーマル（<code>Y1</code>のみ）</td>
+              <td><code>σ²</code></td>
+              <td><code>Y0</code>を全く使わないため、個人差ノイズをそのまま抱える</td>
+            </tr>
+            <tr>
+              <td>DID（<code>Y1-Y0</code>）</td>
+              <td><code>2σ²(1-ρ)</code></td>
+              <td>差分を取ることで個人差の一部が相殺されるが、独立な誤差成分が2倍加わる</td>
+            </tr>
+            <tr>
+              <td>ANCOVA（最適な<code>θ</code>）</td>
+              <td><code>σ²(1-ρ²)</code></td>
+              <td><code>Y0</code>で条件づけた条件付き分散。理論的に達成できる最小の残差分散</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="example">
+        <h3>具体例：ρを変えて比較する</h3>
+        <p><code>2(1-ρ)</code>（DID）と<code>1</code>（ノーマル）を比較すると、<code>ρ &gt; 0.5</code>のときDIDの方が分散が小さく（有利）、<code>ρ &lt; 0.5</code>のときはノーマルの方が有利という、ちょうど<code>ρ=0.5</code>を境にした逆転が起こります。一方<code>(1-ρ²)</code>（ANCOVA）は<code>ρ</code>がどんな値でも<code>1</code>以下であり、かつ<code>2(1-ρ)</code>以下（<code>ρ=1</code>のときのみ等しい）になります。</p>
+      </div>
+      <div class="key-point">
+        <strong>判断の軸:</strong> ANCOVAの残差分散は理論上ノーマル・DIDのどちらより小さいか同等になる。これは「DIDが得意な領域」と「ノーマルが得意な領域」の両方をθの推定によって自動的にカバーできることを意味する。
+      </div>
+      <div class="quiz">
+        <h3>理解チェック</h3>
+        <p><code>ρ=0.5</code>のとき、ノーマルとDIDの分散はどちらも同じ値になります。実際に <code>σ²</code> と <code>2σ²(1-0.5)</code> を計算して確認し、このときANCOVAの分散<code>σ²(1-0.25)=0.75σ²</code>と比べてどちらが小さいか確認してください。</p>
+      </div>
+    </section>
+
+    <section class="section concept" id="theory-background">
+      <p class="section-label">Concept 5</p>
+      <h2>補足：理論的背景（元記事を超えた発展知識）</h2>
+      <p>元記事は「ρが高ければDID、低ければANCOVA」という実務的な目安を示していますが、これは臨床試験統計学とオンラインA/Bテスト分析の両分野で以前から研究されてきた内容と対応しています。ここでは元記事の内容と区別して、その理論的背景を補足します。</p>
+      <div class="example">
+        <h3>Frison &amp; Pocock (1992)</h3>
+        <p>臨床試験の反復測定データを扱った古典的な論文で、上のConcept 4と同じ比較を行い、「介入後のみの分析（POST）」と「変化量の分析（CHANGE）」の優劣が <code>ρ=0.5</code> を境に入れ替わること、そして「ANCOVA」は<code>ρ</code>の値によらず常にPOST・CHANGEのどちらよりも分散が小さいか同等になることを示しました。</p>
+      </div>
+      <div class="example">
+        <h3>CUPED（Deng et al., 2013）</h3>
+        <p>Microsoftのオンライン実験チームが提案した分散削減手法で、介入前のデータ（Pre-Experiment Data）を共変量として使うことで分散を <code>(1-ρ²)</code> 倍に削減できることを示しています。考え方の骨格はANCOVAと同じで、<code>ρ</code>が高いほどサンプルサイズを削減できる（同じ検出力をより少ないユーザー数で達成できる）という実務上のメリットに直結します。</p>
+      </div>
+      <div class="key-point">
+        <strong>ポイント:</strong> 元記事の「使い分け」は実務上の直感として妥当ですが、理論的にはANCOVA（＝適切な共変量調整）を選んでおけば、DIDが有利な状況・ノーマルが有利な状況のどちらでも損をしない、というのがより厳密な結論です。ただし<code>ρ</code>がデータから安定して推定できるサンプルサイズがある前提です。
+      </div>
+    </section>
+
+    <section class="section concept" id="implementation">
+      <p class="section-label">Concept 6</p>
+      <h2>Pythonでの実装例</h2>
+      <p>いずれの分析もOLS回帰として実装できます。<code>statsmodels</code>を使うと3つのデザインを同じインタフェースで比較できます。</p>
+      <pre><code>import statsmodels.formula.api as smf
+
+# df の列: y0（ベースライン）, y1（フォローアップ）, treat（0/1）
+
+# ノーマル
+model_normal = smf.ols("y1 ~ treat", data=df).fit()
+
+# DID（変化量を目的変数にする）
+df["diff"] = df["y1"] - df["y0"]
+model_did = smf.ols("diff ~ treat", data=df).fit()
+
+# ANCOVA（y0を共変量として含める）
+model_ancova = smf.ols("y1 ~ treat + y0", data=df).fit()
+
+for name, m in [("normal", model_normal), ("did", model_did), ("ancova", model_ancova)]:
+    print(name, "coef(treat) =", m.params["treat"], "se =", m.bse["treat"])</code></pre>
+      <div class="example">
+        <h3>実装時の注意点</h3>
+        <p><code>model_ancova.params["y0"]</code> が本文でいう<code>θ</code>の推定値です。この値が1に近ければDIDに近い挙動、0に近ければノーマルに近い挙動をしていることが確認できます。また、Treatmentとの交互作用（<code>treat:y0</code>）を追加すると、施策効果がベースライン水準によって異なるかどうかも検証できます。</p>
+      </div>
+      <div class="quiz">
+        <h3>理解チェック</h3>
+        <p>上のコードで<code>model_ancova.bse["treat"]</code>（ANCOVAの標準誤差）が<code>model_normal.bse["treat"]</code>（ノーマルの標準誤差）より小さくなるのは、どのような<code>y0</code>と<code>y1</code>の関係があるときだと考えられますか。</p>
+      </div>
+    </section>
+
+    <section class="section" id="comparison">
+      <h2>使い分け早見表</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>観点</th>
+              <th>ノーマル</th>
+              <th>DID</th>
+              <th>ANCOVA</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>回帰式</td>
+              <td><code>Y1 = a + b・Treat</code></td>
+              <td><code>Y1-Y0 = a + b・Treat</code></td>
+              <td><code>Y1 = a + b・Treat + θ・Y0</code></td>
+            </tr>
+            <tr>
+              <td>ベースラインの扱い</td>
+              <td>使わない</td>
+              <td>係数1固定で差し引く</td>
+              <td>係数θをデータから推定</td>
+            </tr>
+            <tr>
+              <td>ヘビーユーザー耐性</td>
+              <td>低い</td>
+              <td>ρが高いときに強い</td>
+              <td>ρの値によらず安定</td>
+            </tr>
+            <tr>
+              <td>実装コスト</td>
+              <td>最小</td>
+              <td>小（差分列を作るだけ）</td>
+              <td>小（共変量を1列足すだけ）</td>
+            </tr>
+            <tr>
+              <td>必要な前提</td>
+              <td>特になし</td>
+              <td>ベースライン測定が取得できる</td>
+              <td>ベースライン測定が取得でき、θ推定に十分なサンプルサイズがある</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" id="decision">
+      <h2>適用判断の手順</h2>
+      <ol class="steps">
+        <li>目的変数（課金額・利用時間など）の分布を確認し、ヘビーユーザーによる歪みが大きいかを見る。</li>
+        <li>介入前のベースライン測定（<code>Y0</code>）が取得可能かを確認する。取得できないならノーマルな方法しか選べない。</li>
+        <li>過去データから<code>Y0</code>と<code>Y1</code>相当の指標の相関<code>ρ</code>を概算する。</li>
+        <li>サンプルサイズに余裕があるなら、まずANCOVAを既定の選択肢として検討する（θを推定できるため）。</li>
+        <li>サンプルサイズが小さくθの推定が不安定になりそうな場合は、ρの高さに応じてDID／ノーマルのどちらかを簡易的に選ぶ。</li>
+        <li>実装後は<code>θ</code>の推定値と標準誤差を確認し、想定と乖離していないかをチェックする。</li>
+      </ol>
+    </section>
+
+    <section class="section" id="summary">
+      <h2>まとめ・次のステップ</h2>
+      <p>ヘビーユーザーの影響でA/Bテストの効果判定がぶれる問題は、目的変数の個人差ノイズをどれだけ取り除けるかという分散の問題として理解できます。ノーマルな分析はベースラインを使わずこのノイズをそのまま抱え、DIDはベースラインとの差分を取ることで自己相関が高い場合にノイズを減らし、ANCOVAはベースラインの係数θをデータから推定することで、DIDが得意な領域・ノーマルが得意な領域の両方を理論的にカバーします。</p>
+      <p>次のステップとしては、自分の業務データで<code>Y0</code>と<code>Y1</code>の相関<code>ρ</code>を実際に計算してみること、そしてPythonの実装例を使ってノーマル・DID・ANCOVAの標準誤差を比較し、どの程度分散削減の効果があるかを体感することをおすすめします。余裕があれば、Treatmentとベースラインの交互作用項を加えたモデルにも挑戦してみてください。</p>
+    </section>
+
+    <section class="section references" id="references">
+      <h2>参照資料</h2>
+      <ul>
+        <li><a href="https://note.com/abogadoron/n/n0ee6c04ee471">特殊なユーザーの影響を取り除く：DIDやANCOVAデザインでのA/Bテスト</a>（Ito Hirotake, note, 2026-07-12）</li>
+        <li>Frison, L. and Pocock, S. (1992) Repeated Measures in Clinical Trials: Analysis Using Mean Summary Statistics and Its Implications for Design. <em>Statistics in Medicine</em>, 11, 1685-1704.</li>
+        <li>Deng, A., Xu, Y., Kohavi, R., and Walker, T. (2013) Improving the Sensitivity of Online Controlled Experiments by Utilizing Pre-Experiment Data. <em>WSDM 2013</em>.（CUPED）</li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>
