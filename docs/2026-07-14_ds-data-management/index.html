@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>データサイエンティストのためのデータマネジメント入門</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="hero">
+    <div class="wrap">
+      <a class="back-link" href="../">教材一覧へ</a>
+      <p class="eyebrow">Data Management &amp; Metadata</p>
+      <h1>あるデータサイエンティストのデータマネジメントとの向き合い方</h1>
+      <p class="lead">データレイク・DWH・マートの三層構造の設計思想と、<code>dbt-osmosis</code>などを使ったメタデータ管理の実践方法、そしてデータ整備を組織で推進するための考え方までを整理する教材です。</p>
+      <dl class="meta">
+        <div>
+          <dt>対象</dt>
+          <dd>SQL・BigQueryでのデータ分析経験はあるが、データ基盤の設計・整備は未経験のデータ分析者</dd>
+        </div>
+        <div>
+          <dt>作成日</dt>
+          <dd>2026-07-14</dd>
+        </div>
+        <div>
+          <dt>元資料</dt>
+          <dd><a href="https://speakerdeck.com/brainpadpr/bai-jin-kuang-ye-meetup-vol-dot-17-arudetasaienteisutonodetamanezimentotonoxiang-kihe-ifang">白金鉱業Meetup Vol.17_あるデータサイエンティストのデータマネジメントとの向き合い方（浅野, 株式会社ブレインパッド）</a></dd>
+        </div>
+      </dl>
+    </div>
+  </header>
+
+  <main class="wrap content">
+    <section class="section" id="goals">
+      <h2>この教材で学べること</h2>
+      <div class="goal-grid">
+        <article>
+          <h3>データ基盤の三層構造</h3>
+          <p>データレイク・DWH・マートをなぜ分けるのか、それぞれの役割を設計思想として理解します。</p>
+        </article>
+        <article>
+          <h3>メタデータ管理の実践方法</h3>
+          <p>BigQueryでのカラム説明管理から<code>dbt-osmosis</code>による自動伝播まで、具体的な手順を扱います。</p>
+        </article>
+        <article>
+          <h3>データ整備を組織で推進する考え方</h3>
+          <p>「木こりのジレンマ」と、DSが推進役になるべき理由（ケイパビリティとインセンティブ）を扱います。</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="prerequisites">
+      <h2>前提知識の確認</h2>
+      <ul class="check-list">
+        <li>SQLでテーブルを結合・集計するクエリを書いたことがある</li>
+        <li>CSVやスプレッドシートでデータをやり取りした経験がある</li>
+        <li>「データ分析プロジェクト」がどのような流れ（要件定義〜運用）で進むか、大まかにイメージできる</li>
+      </ul>
+      <p>この教材は、分析でデータを使う側の経験はあるが、データ基盤そのものの設計・整備は未経験という方を想定しています。基盤設計の専門用語は使う場面ごとに説明します。</p>
+    </section>
+
+    <section class="section" id="roadmap">
+      <h2>学習ロードマップ</h2>
+      <ol class="roadmap">
+        <li>
+          <span>Phase 1</span>
+          <strong>データ基盤を三層に分ける設計思想を理解する</strong>
+          <p>データレイク・DWH・マートがそれぞれ何のためにあるのかを整理します。</p>
+        </li>
+        <li>
+          <span>Phase 2</span>
+          <strong>メタデータという概念と、その全体像を押さえる</strong>
+          <p>DAMA-DMBOK2の定義、Aikenのピラミッド、メタデータの3分類を確認します。</p>
+        </li>
+        <li>
+          <span>Phase 3</span>
+          <strong>メタデータ管理を実践する（重点領域）</strong>
+          <p>BigQueryでのカラム説明管理と、<code>dbt-osmosis</code>による自動伝播の具体的な使い方を扱います。</p>
+        </li>
+        <li>
+          <span>Phase 4</span>
+          <strong>データ整備を組織で推進する視点を持つ</strong>
+          <p>「木こりのジレンマ」と、DSが推進役になるべき理由を整理し、実務への応用を考えます。</p>
+        </li>
+      </ol>
+    </section>
+
+    <section class="section concept" id="three-tier">
+      <p class="section-label">Concept 1</p>
+      <h2>なぜデータ基盤を三層に分けるのか</h2>
+      <p>データ基盤は一般に「データソース → データレイク → データウェアハウス（DWH） → データマート」という段階を経て整備されます。それぞれの層には明確な役割があります。</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>層</th>
+              <th>役割</th>
+              <th>メリット</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>データレイク</td>
+              <td>データを「そのままコピー」して1カ所に集める</td>
+              <td>格納先確認などのコストが下がり、組織横断的な分析が可能になる</td>
+            </tr>
+            <tr>
+              <td>データウェアハウス（DWH）</td>
+              <td>「共通化されたデータ」を置く</td>
+              <td>各所での後続処理を省け、誰でも同じ定義の指標（例: 売上）を参照できる</td>
+            </tr>
+            <tr>
+              <td>データマート</td>
+              <td>加工処理した「特定の目的のデータ」を置く</td>
+              <td>すぐに集計結果を確認でき、応答時間が速く、他用途への影響を気にせず自由に更新できる</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="example">
+        <h3>具体例</h3>
+        <p>データレイクで「そのまま」コピーするのは、分析テーマによって適切な加工方法が異なるためです。最初から特定の目的に加工してしまうと、レイクの段階で情報が失われ、後から別の分析テーマに使い回せなくなります。</p>
+      </div>
+      <div class="key-point">
+        <strong>判断の軸:</strong> 「このデータをどれだけ多くの用途に使い回したいか」が、レイク（汎用）・DWH（共通化）・マート（特定目的）のどこに置くべきかを決める軸になる。
+      </div>
+      <div class="quiz">
+        <h3>理解チェック</h3>
+        <p>「売上」の定義が部署によってバラバラだったチームが、DWH層を整備したとします。これによって解消される問題を、マート層だけを整備した場合と比較して説明してください。</p>
+      </div>
+    </section>
+
+    <section class="section concept" id="metadata-basics">
+      <p class="section-label">Concept 2</p>
+      <h2>メタデータとは何か：DAMA-DMBOK2とAikenのピラミッド</h2>
+      <p>データマネジメントの標準的な定義として、DAMA-DMBOK2は次のように述べています。</p>
+      <div class="example">
+        <h3>DAMA-DMBOK2の定義</h3>
+        <p>「データとインフォメーションという資産の価値を提供し、管理し、守り、高めるために、それらのライフサイクルを通して計画、方針、スケジュール、手順などを開発、実施、監督することである」</p>
+      </div>
+      <p>この定義は範囲が広いため、資料では「Aikenのピラミッド」を使って位置づけを整理しています。土台に<strong>データマネジメント</strong>があり、その上に<strong>データ分析</strong>、さらにその上に<strong>ビッグデータ活用</strong>が積み上がるという階層構造です。つまり、派手な分析・活用の前提として、地味な整備（データマネジメント）が土台になっているという考え方です。</p>
+      <p>メタデータ（「データを説明するためのデータ」）は、一般に3種類に分類されます。</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>分類</th>
+              <th>内容の例</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>ビジネスメタデータ</td>
+              <td>そのデータが何を意味するか、誰が使うか、業務上の定義</td>
+            </tr>
+            <tr>
+              <td>テクニカルメタデータ</td>
+              <td>カラムの名称・型、テーブルの構造、変換ロジック</td>
+            </tr>
+            <tr>
+              <td>オペレーショナルメタデータ</td>
+              <td>抽出結果の履歴、実行ログ、アクセス権限、更新頻度</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="key-point">
+        <strong>判断の軸:</strong> メタデータ整備で困ったときは「これはビジネス・テクニカル・オペレーショナルのどれを説明する情報か」を切り分けると、抜け漏れに気づきやすい。
+      </div>
+      <div class="quiz">
+        <h3>理解チェック</h3>
+        <p>「このカラムの値は税込みか税抜きか分からない」という問題は、3分類のうちどのメタデータが不足している状態でしょうか。</p>
+      </div>
+    </section>
+
+    <section class="section concept" id="bigquery-metadata">
+      <p class="section-label">Concept 3</p>
+      <h2>実践①：BigQueryでカラムの説明を管理する</h2>
+      <p>もっとも手軽なメタデータ管理は、データマートを作成するコード自体に説明を埋め込むことです。BigQueryでは、テーブル作成時にカラムの<code>description</code>を直接指定できます。</p>
+      <pre><code>CREATE TABLE `project.dataset.sales_mart` (
+  order_id STRING OPTIONS(description="注文ID。ソースシステムの注文番号と1:1対応"),
+  sales_amount_jpy NUMERIC OPTIONS(description="税込み売上金額（円）。返品時はマイナス値"),
+  order_date DATE OPTIONS(description="注文日。JST基準")
+)
+OPTIONS(description="日次の店舗別売上を集計したデータマート");</code></pre>
+      <div class="example">
+        <h3>具体例</h3>
+        <p>「税込みか税抜きか」「タイムゾーンはJSTかUTCか」といった、資料で例示されていた曖昧になりがちな情報を、カラムの説明としてスキーマ自体に埋め込んでおくと、クエリを書く人がBigQueryのコンソール上で確認でき、口頭確認や過去のドキュメントを探す手間が減ります。</p>
+      </div>
+      <div class="key-point">
+        <strong>判断の軸:</strong> ドキュメントを別ファイル（Wiki等）で管理すると更新が追いつきにくい。コードとメタデータを同じ場所（同じPR）で更新できる仕組みにしておくと、鮮度が保ちやすい。
+      </div>
+    </section>
+
+    <section class="section concept" id="dbt-osmosis">
+      <p class="section-label">Concept 4</p>
+      <h2>実践②：dbt-osmosisによるメタデータの自動伝播</h2>
+      <p>データマートが増えてくると、同じカラム（例: <code>order_id</code>）の説明を、上流モデルから下流モデルへ何度も手で書き写す必要が出てきます。<code>dbt-osmosis</code>はこの手間を解消するツールで、公式ドキュメントには次のように説明されています。</p>
+      <div class="example">
+        <h3>公式ドキュメントの記載</h3>
+        <p>「カラムドキュメントの継承機能は、リネージ（データの系譜）に基づいて、上流モデルのカラムの説明・タグ・その他メタデータを下流モデルへ自動的に伝播させる」</p>
+      </div>
+      <p>代表的なコマンドは次の3つです。</p>
+      <pre><code># スキーマYAMLファイルの構成を整理する
+dbt-osmosis yaml organize
+
+# 上流モデルの説明を下流モデルへ伝播させる
+dbt-osmosis yaml document
+
+# organize/documentなどをまとめて実行する（推奨コマンド）
+dbt-osmosis yaml refactor</code></pre>
+      <div class="example">
+        <h3>具体例：CI/CDへの組み込み</h3>
+        <p>公式ドキュメントでは、<code>dbt-osmosis yaml refactor -C</code>をpre-commitフックとして組み込む例が紹介されています。これにより、開発者が新しいモデルを追加してコミットするたびに、既存の説明が自動的に下流へ伝播し、「上流の説明だけ更新して下流を直し忘れる」というメタデータの陳腐化を防げます。</p>
+        <pre><code># .pre-commit-config.yaml の例（イメージ）
+- repo: local
+  hooks:
+    - id: dbt-osmosis-refactor
+      name: dbt-osmosis yaml refactor
+      entry: dbt-osmosis yaml refactor -C
+      language: system
+      pass_filenames: false</code></pre>
+      </div>
+      <div class="key-point">
+        <strong>判断の軸:</strong> 「同じカラムが複数モデルに登場するか」「説明を書く場所が上流と下流でズレやすいか」が、dbt-osmosis導入の効果を判断する軸になる。手動でのコピペ運用が3箇所を超えたあたりから導入価値が出やすい。
+      </div>
+      <div class="quiz">
+        <h3>理解チェック</h3>
+        <p>upstream（ステージング層）のモデルでカラムの説明を1つ更新し、<code>dbt-osmosis yaml document</code>を実行したとします。このカラムを参照している下流のマートが3つあった場合、手作業のときと比べて何が変わるか説明してください。</p>
+      </div>
+    </section>
+
+    <section class="section concept" id="small-start">
+      <p class="section-label">Concept 5</p>
+      <h2>スモールスタートという考え方</h2>
+      <p>三層構造やメタデータ管理は理想形として整理されていますが、資料では「最初から本格的に作らなくてよい」ことも強調されています。「ドライブのディレクトリ分け＋元データコピー」から始めることも容認される、という主張です。</p>
+      <div class="example">
+        <h3>具体例</h3>
+        <p>BigQueryやdbt環境を用意する前でも、共有ドライブに「レイク相当（生データのコピー置き場）」「マート相当（集計済みの共有フォルダ）」のようにディレクトリを分けるだけで、三層構造の考え方の一部を先取りできます。ツール導入は後からでも構いません。</p>
+      </div>
+      <div class="key-point">
+        <strong>判断の軸:</strong> 「今すぐ完璧な基盤を作れるか」ではなく「今の混乱を一段階でも整理できるか」を基準に、身の丈に合った一歩から始める。
+      </div>
+    </section>
+
+    <section class="section concept" id="lumberjack">
+      <p class="section-label">Concept 6</p>
+      <h2>木こりのジレンマ：なぜDSが推進役になるべきか</h2>
+      <p>データ整備を提案しても、「データを整備するともっと早く分析できますよ」に対して「分析が忙しくてそんな暇はないんだよ」という反応が返ってくることがあります。これが「木こりのジレンマ」（斧を研ぐ時間がなく、切れない斧で木を切り続ける寓話になぞらえたもの）です。</p>
+      <div class="example">
+        <h3>解決の方向性</h3>
+        <p>資料が提示する解決策は、いきなり全社的な整備計画を立てるのではなく、まず試験運用の段階で具体的な成果物（例: 説明付きのデータマート）を使ってもらい、価値を実感してもらうことです。「整備の議論」より先に「整備された小さな成果物」を見せる、というアプローチです。</p>
+      </div>
+      <p>そのうえで資料は、DS自身がデータマネジメントの推進役になるべき理由を2つ挙げています。</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>理由</th>
+              <th>内容</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>ケイパビリティ</td>
+              <td>データに一番詳しいのはDS自身であり、何が整備されていないかを具体的に指摘できる</td>
+            </tr>
+            <tr>
+              <td>インセンティブ</td>
+              <td>データが綺麗になって一番最初に恩恵を受けるのはDS自身（分析が速く・正確になる）</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="key-point">
+        <strong>判断の軸:</strong> 「誰が整備すべきか」の議論で止まっている場合、「一番困っていて一番詳しい人（多くはDS自身）から小さく始める」という順番に切り替えると前進しやすい。
+      </div>
+      <div class="quiz">
+        <h3>理解チェック</h3>
+        <p>あなたのチームで「データ整備を提案しても後回しにされる」状況があるとしたら、木こりのジレンマのどの部分（忙しさ／価値の未実感／推進役の不在）が一番の障害になっていると考えられますか。</p>
+      </div>
+    </section>
+
+    <section class="section" id="comparison">
+      <h2>三層構造・メタデータ管理の使い分け早見表</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>状況</th>
+              <th>とるべきアクション</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>データがまだ各所に散らばっている</td>
+              <td>まずはデータレイク相当（1カ所への「そのまま」集約）から着手する</td>
+            </tr>
+            <tr>
+              <td>同じ指標（売上など）の定義が部署ごとに違う</td>
+              <td>DWH相当（共通化されたデータ）の整備を優先する</td>
+            </tr>
+            <tr>
+              <td>特定の用途向けにすぐ使えるデータが欲しい</td>
+              <td>データマート層で目的別に加工する</td>
+            </tr>
+            <tr>
+              <td>同じカラムの説明を複数箇所に手でコピペしている</td>
+              <td>dbt-osmosisなどによる説明の自動伝播を検討する</td>
+            </tr>
+            <tr>
+              <td>整備の提案が「忙しいから後で」と後回しにされる</td>
+              <td>試験運用で小さな成果物を見せ、DS自身が推進役になる</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" id="decision">
+      <h2>適用判断の手順</h2>
+      <ol class="steps">
+        <li>今のデータがどこに散らばっていて、どこまで「そのまま」集約できているかを確認する。</li>
+        <li>同じ指標の定義がチーム・部署間で食い違っていないかを洗い出す（DWH整備の必要性の確認）。</li>
+        <li>頻繁に使うデータマートについて、まずBigQueryのカラム説明（description）から埋めていく。</li>
+        <li>同じカラムの説明を3箇所以上手でコピペしている場合は、dbt-osmosisの導入を検討する。</li>
+        <li>整備の提案が後回しにされる場合は、全体計画より先に、小さく整備した成果物を試験運用で見せる。</li>
+        <li>整備がチームに定着したら、次の対象（別のマート、別のメタデータ分類）へ広げる。</li>
+      </ol>
+    </section>
+
+    <section class="section" id="summary">
+      <h2>まとめ・次のステップ</h2>
+      <p>データ基盤を「データレイク（そのままコピー）→DWH（共通化）→データマート（目的別加工）」の三層に分ける考え方は、それぞれの層に異なる役割を持たせることで、データの使い回しやすさと、特定用途への最適化を両立させるための設計思想です。メタデータ管理は、この基盤を長期的に使えるものにするための「データを説明する情報」の整備であり、BigQueryのカラム説明のような手軽な方法から、dbt-osmosisによる自動伝播のような仕組み化まで、段階的に強化できます。そして、こうした整備は「木こりのジレンマ」に陥りがちなため、データに一番詳しく、整備の恩恵を一番早く受けるDS自身が、小さな成果物から推進役になることが有効です。</p>
+      <p>次のステップとしては、自分が普段使っているデータマートのカラムのうち、説明が曖昧なものを1つ選んでBigQueryのdescriptionを埋めてみること、そして複数モデルで説明のコピペが発生している箇所があればdbt-osmosisの<code>yaml document</code>コマンドを試してみることをおすすめします。</p>
+    </section>
+
+    <section class="section references" id="references">
+      <h2>参照資料</h2>
+      <ul>
+        <li><a href="https://speakerdeck.com/brainpadpr/bai-jin-kuang-ye-meetup-vol-dot-17-arudetasaienteisutonodetamanezimentotonoxiang-kihe-ifang">白金鉱業Meetup Vol.17_あるデータサイエンティストのデータマネジメントとの向き合い方</a>（浅野, 株式会社ブレインパッド, 2025-02-20）</li>
+        <li><a href="https://z3z1ma.github.io/dbt-osmosis/">dbt-osmosis Docs</a>（カラムドキュメント継承・<code>yaml document</code>/<code>yaml refactor</code>コマンドの説明）</li>
+        <li><a href="https://github.com/z3z1ma/dbt-osmosis">z3z1ma/dbt-osmosis (GitHub)</a></li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>
