@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>個人的Webサービスを作るときの構成 2026</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="hero">
+    <div class="wrap">
+      <a class="back-link" href="../">教材一覧へ</a>
+      <p class="eyebrow">Personal Development &amp; Hosting Stack</p>
+      <h1>個人的Webサービスを作るときの構成 2026</h1>
+      <p class="lead">個人開発でWebサービスを作るとき、静的サイトかサーバーが必要か、DB・ストレージ・メール配信・認証・決済をどう選ぶか。要件別の判断フローと、その背景にある「なぜその選択肢なのか」を整理する教材です。</p>
+      <dl class="meta">
+        <div>
+          <dt>対象</dt>
+          <dd>個人開発でWebサービスを作りたい、技術選定の考え方を知りたい方</dd>
+        </div>
+        <div>
+          <dt>作成日</dt>
+          <dd>2026-07-27</dd>
+        </div>
+        <div>
+          <dt>元投稿</dt>
+          <dd><a href="https://x.com/catnose99/status/2079777959167340607">個人的Webサービスを作るときの構成 2026（catnose, X）</a></dd>
+        </div>
+      </dl>
+    </div>
+  </header>
+
+  <main class="wrap content">
+    <section class="section" id="goals">
+      <h2>この教材で学べること</h2>
+      <div class="goal-grid">
+        <article>
+          <h3>要件別の技術選定フロー</h3>
+          <p>静的サイト・サーバーあり・DB・ストレージ・メール配信それぞれの選び方の判断軸を学びます。</p>
+        </article>
+        <article>
+          <h3>各選択肢が選ばれる理由</h3>
+          <p>単なるツール名の暗記ではなく、コスト・規模・運用の手間という観点から「なぜその選択肢か」を理解します。</p>
+        </article>
+        <article>
+          <h3>自分のサービスへの当てはめ方</h3>
+          <p>このフローチャートを自分が作りたいサービスにどう適用するかの手順を扱います。</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="prerequisites">
+      <h2>前提知識の確認</h2>
+      <ul class="check-list">
+        <li>Webサービスにはフロントエンド・サーバー（バックエンド）・データベース・ストレージといった構成要素があることを知っている</li>
+        <li>「静的サイト」と「サーバーが必要な動的サイト」の違いをおおまかにイメージできる</li>
+        <li>AWS・Google Cloud・Cloudflareといったクラウドサービスの名前を聞いたことがある</li>
+      </ul>
+    </section>
+
+    <section class="section" id="roadmap">
+      <h2>学習ロードマップ</h2>
+      <ol class="roadmap">
+        <li>
+          <span>Phase 1</span>
+          <strong>静的に作れるサイトの選び方を理解する</strong>
+          <p>1ページの簡単なページから、Astro・Next.js Static Export・簡単なAPIまでの選び方を確認します。</p>
+        </li>
+        <li>
+          <span>Phase 2</span>
+          <strong>サーバーが必要な場合の選び方を理解する</strong>
+          <p>規模とコスト・スピードのトレードオフから、TanStack Start・Vercel・OpenNextの使い分けを確認します。</p>
+        </li>
+        <li>
+          <span>Phase 3</span>
+          <strong>DB・ストレージの選び方を理解する</strong>
+          <p>Cloudflare系・Postgres系それぞれの選択肢と、コストとリスクのトレードオフを確認します。</p>
+        </li>
+        <li>
+          <span>Phase 4</span>
+          <strong>メール配信・認証・決済・アクセス制御を整理する</strong>
+          <p>送信量に応じたメール配信サービスの選び方と、その他の実務的な要素を確認します。</p>
+        </li>
+        <li>
+          <span>Phase 5</span>
+          <strong>複雑な要件とAIへの相談という締めくくりを理解する</strong>
+          <p>個人開発の範囲を超えるビジネス要件でのGoogle Cloud活用と、フローチャートの限界を確認します。</p>
+        </li>
+      </ol>
+    </section>
+
+    <section class="section concept" id="static-site">
+      <p class="section-label">Concept 1</p>
+      <h2>静的に作れるサイトの選び方</h2>
+      <p>サーバー側の処理がほとんど要らないサービスは、静的サイトとしてCloudflareに置くのが基本方針です。複雑さのレベルによって選ぶツールが変わります。</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>要件</th>
+              <th>選択肢</th>
+              <th>選ぶ理由</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>1ページだけの簡単なページ</td>
+              <td>htmlファイルを書いてCloudflareに置く</td>
+              <td>フレームワークを導入する必要すらない、最小構成</td>
+            </tr>
+            <tr>
+              <td>単純な静的ビルド</td>
+              <td>React + Vite</td>
+              <td>ビルド設定がシンプルで、素早く立ち上げられる</td>
+            </tr>
+            <tr>
+              <td>ちょい複雑</td>
+              <td>Next.jsでStatic Export</td>
+              <td>ページ数が多い・ルーティングが複雑でも、サーバーなしでビルドし切れる</td>
+            </tr>
+            <tr>
+              <td>記事っぽいコンテンツ中心</td>
+              <td>Astro</td>
+              <td>コンテンツ中心のサイトに特化しており、パフォーマンスが出しやすい</td>
+            </tr>
+            <tr>
+              <td>ちょっとしたAPIが必要</td>
+              <td>Cloudflare Workersにエンドポイントを生やす、またはHonoを使う</td>
+              <td>静的サイトの構成を保ったまま、部分的にサーバー処理だけ追加できる</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="example">
+        <h3>具体例</h3>
+        <p>個人のポートフォリオサイトであれば「Next.jsでStatic Export」で十分ですが、「お問い合わせフォームだけサーバー側で処理したい」という場合、サイト全体をサーバーが必要な構成に切り替える必要はなく、そのフォーム送信だけをCloudflare WorkersやHonoで作った小さなAPIエンドポイントに任せる、という部分的な使い方ができます。</p>
+      </div>
+      <div class="key-point">
+        <strong>判断の軸:</strong> 「ページの複雑さ」と「サーバー処理がどれだけ必要か」を分けて考える。サーバー処理が一部だけなら、サイト全体を動的にする前に、Workers/Honoでの部分的なAPI追加を検討する。
+      </div>
+      <div class="quiz">
+        <h3>理解チェック</h3>
+        <p>個人ブログを作る場合、「単純なReact + Vite」ではなく「Astro」が候補に挙がる理由を、記事コンテンツ中心のサイトという特性から説明してください。</p>
+      </div>
+    </section>
+
+    <section class="section concept" id="server-needed">
+      <p class="section-label">Concept 2</p>
+      <h2>サーバーが必要な場合の選び方</h2>
+      <p>ログイン機能やリアルタイム性の高い処理など、静的ビルドだけでは対応できない場合は、サーバーが必要な構成を選びます。ここでは「規模」と「コスト対スピード」のトレードオフが判断軸になります。</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>要件</th>
+              <th>選択肢</th>
+              <th>選ぶ理由</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>小規模〜中規模</td>
+              <td>TanStack Start on CF Workers</td>
+              <td>Cloudflareの環境で完結し、コストを抑えつつサーバー機能を持てる</td>
+            </tr>
+            <tr>
+              <td>中〜大規模。最短で出したい</td>
+              <td>Next.js on Vercel</td>
+              <td>Next.jsとVercelの組み合わせは情報・実績が豊富で、開発速度を優先できる</td>
+            </tr>
+            <tr>
+              <td>中規模でコスト削減したい（苦しむ覚悟がある）</td>
+              <td>OpenNext on CF Workers</td>
+              <td>Next.jsの機能を保ちながらCloudflare Workers上で動かせるが、設定の複雑さを受け入れる必要がある</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="example">
+        <h3>具体例：OpenNextの位置づけ</h3>
+        <p><code>@opennextjs/cloudflare</code>というアダプタは、Next.jsのビルド出力をCloudflare Workersで動く形式に変換します。Node.js互換フラグ（<code>nodejs_compat</code>）の有効化など、Vercelにそのままデプロイする場合と比べて設定項目が増えるため、「苦しむ覚悟がある」という注記がされているのは、コスト削減と引き換えに運用の複雑さを引き受ける必要があることを示しています。</p>
+      </div>
+      <div class="key-point">
+        <strong>判断の軸:</strong> 「開発・運用に割ける時間」と「コスト」のどちらを優先するかで選択肢が変わる。最短で出したいならVercel、コストを抑えたいがCloudflareの流儀に慣れているならOpenNext、という整理になる。
+      </div>
+      <div class="quiz">
+        <h3>理解チェック</h3>
+        <p>「小規模〜中規模」ではTanStack Start on CF Workersが候補になるのに対し、「中規模でコスト削減したい」場合はOpenNextが候補になっています。この2つの違いは何によって生まれると考えられますか（フレームワークの選択とデプロイ環境の関係から考えてください）。</p>
+      </div>
+    </section>
+
+    <section class="section concept" id="database">
+      <p class="section-label">Concept 3</p>
+      <h2>DBの選び方</h2>
+      <p>データベースの選定では「Cloudflareで完結させたいか」「Postgres/MySQLが必要か」「コストをどこまでかけられるか」が主な判断軸です。</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>要件</th>
+              <th>選択肢</th>
+              <th>選ぶ理由</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>小〜中規模 & CF Workersを使う</td>
+              <td>D1 / Durable Objects</td>
+              <td>Cloudflareのエコシステム内で完結し、追加のインフラ管理が要らない</td>
+            </tr>
+            <tr>
+              <td>Cloudflare以外で小〜中規模</td>
+              <td>Turso</td>
+              <td>SQLite系の軽量DBをマネージドで使え、Cloudflare以外の環境でも扱いやすい</td>
+            </tr>
+            <tr>
+              <td>Postgresを使いたいが安くしたい</td>
+              <td>国内向けならSupabase、それ以外ならNeon</td>
+              <td>どちらもPostgres互換で低コストな選択肢。ただしNeonは2026年7月時点で東京リージョンがないため、国内向けサービスではレイテンシの観点でSupabaseが有利になりやすい</td>
+            </tr>
+            <tr>
+              <td>Postgres or MySQLを使いたい & コストは許容できる</td>
+              <td>PlanetScale</td>
+              <td>2025年にPostgresサポートがGAになり、MySQL・Postgresどちらの互換性も選べる選択肢になった</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="key-point">
+        <strong>判断の軸:</strong> Cloudflare Workersを使う前提ならまずD1/Durable Objectsを検討し、Postgres/MySQLが必須になった時点でSupabase・Neon・PlanetScaleへ選択肢を広げる、という順序で考えると整理しやすい。国内向けサービスではリージョン（レイテンシ）も判断材料になる。
+      </div>
+      <div class="quiz">
+        <h3>理解チェック</h3>
+        <p>国内向けのサービスでNeonよりSupabaseが候補に挙がりやすい理由を、リージョンの観点から説明してください。</p>
+      </div>
+    </section>
+
+    <section class="section concept" id="storage">
+      <p class="section-label">Concept 4</p>
+      <h2>ストレージの選び方</h2>
+      <p>画像や添付ファイルなどのオブジェクトストレージは、「コスト」と「データが消えた場合の被害の大きさ」のバランスで選びます。</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>要件</th>
+              <th>選択肢</th>
+              <th>選ぶ理由</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>節約したい</td>
+              <td>R2</td>
+              <td>エグレス（転送）費用がかからず、コストを抑えやすい</td>
+            </tr>
+            <tr>
+              <td>吹っ飛んだら詰む</td>
+              <td>AWS S3 または GCS（バージョニング有効化）</td>
+              <td>実績のあるマネージドストレージで、バージョニングを有効にすることで誤削除・上書きからも復旧できる</td>
+            </tr>
+            <tr>
+              <td>節約したい & 吹っ飛んだら詰む</td>
+              <td>R2 + 定期バックアップ（S3/GCSの最安ストレージクラス）</td>
+              <td>普段の運用コストはR2で抑えつつ、バックアップ先を別クラウドの安価なストレージクラスに置くことで、片方の障害・誤操作にも備えられる</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="key-point">
+        <strong>判断の軸:</strong> 「壊れても許容できるデータか」を最初に問う。許容できないデータほど、単一のストレージ・単一のクラウドに依存しない構成（別クラウドへの定期バックアップ）を検討する。
+      </div>
+      <div class="quiz">
+        <h3>理解チェック</h3>
+        <p>「R2 + 定期バックアップ」という構成が、単に「R2だけ」や「S3だけ」と比べてどのようなリスクに備えられるようになっているか説明してください。</p>
+      </div>
+    </section>
+
+    <section class="section concept" id="email">
+      <p class="section-label">Concept 5</p>
+      <h2>メール配信の選び方</h2>
+      <p>メール配信サービスの選定は「送信量」と「既に使っているインフラ（Cloudflare Workersなど）」が主な判断軸です。</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>要件</th>
+              <th>選択肢</th>
+              <th>選ぶ理由</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>たくさん送る</td>
+              <td>AWS SES</td>
+              <td>導入はやや手間だが、大量送信時の単価が安い</td>
+            </tr>
+            <tr>
+              <td>Cloudflare Workersを使っている</td>
+              <td>Cloudflare Email Service</td>
+              <td>Workersからネイティブなバインディング（<code>env.EMAIL.send()</code>）で送信でき、SPF/DKIM/DMARCも自動設定される。2026年4月にEmail Sending機能がパブリックベータ化された新しい選択肢</td>
+            </tr>
+            <tr>
+              <td>あんまり送らない</td>
+              <td>Resend</td>
+              <td>少量の送信であれば、シンプルに導入・運用できる</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="example">
+        <h3>SendGridが候補から外れた理由</h3>
+        <p>Twilio SendGridは2025年5月27日から無料プランの提供終了を開始し、同年7月26日に完全終了しました。新規アカウントは60日間のトライアル後、有料プラン（月額19.95ドル〜）のみとなっています。個人開発の少量送信用途では、無料プランがなくなったことで相対的な魅力が下がり、Resendなど他の選択肢に置き換わったという経緯です。</p>
+      </div>
+      <div class="key-point">
+        <strong>判断の軸:</strong> 送信量が増えるほど単価の安さ（SES）が重要になり、送信量が少ないうちは導入の手軽さ（Resend、あるいはWorkersを使っているならCloudflare Email Service）を優先する。
+      </div>
+      <div class="quiz">
+        <h3>理解チェック</h3>
+        <p>すでにCloudflare Workersでサービスを構築している場合、Resendではなく Cloudflare Email Service を検討するメリットは何だと考えられますか（認証情報の管理という観点から考えてください）。</p>
+      </div>
+    </section>
+
+    <section class="section concept" id="others">
+      <p class="section-label">Concept 6</p>
+      <h2>決済・認証・リアルタイム同期・限定公開</h2>
+      <p>個人開発でよく必要になるその他の要素についても、定番の選択肢と検討の順序が示されています。</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>要件</th>
+              <th>選択肢</th>
+              <th>選ぶ理由</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>決済</td>
+              <td>Stripe</td>
+              <td>個人開発における決済の事実上の標準で、実績・ドキュメントが豊富</td>
+            </tr>
+            <tr>
+              <td>認証</td>
+              <td>BetterAuthを検討し、要件が合わなければ何かサービスを使う</td>
+              <td>まず自前でコントロールしやすいライブラリを検討し、要件（ソーシャルログインの種類、規模など）に合わなければ認証専業サービスに切り替える、という順序</td>
+            </tr>
+            <tr>
+              <td>リアルタイム同期したい</td>
+              <td>Cloudflare WorkersのDurable Objects</td>
+              <td>状態を持つWorkerとして、複数クライアント間のリアルタイム同期を実現できる</td>
+            </tr>
+            <tr>
+              <td>一部の人にだけ公開したい</td>
+              <td>Cloudflare Zero Trust</td>
+              <td>アプリ側に認証機能を作り込まなくても、アクセス制御をインフラ側で完結できる</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="key-point">
+        <strong>判断の軸:</strong> 「アプリのコア機能ではない部分（認証・アクセス制御）」は、まず既存サービス・インフラ機能で済ませられないかを先に検討し、自前実装は最後の手段にする。
+      </div>
+    </section>
+
+    <section class="section concept" id="gcp-complex">
+      <p class="section-label">Concept 7</p>
+      <h2>ビジネス要件が複雑な場合：Google Cloudの組み合わせ</h2>
+      <p>個人開発の枠を超えて、ビジネス的な要件（複雑な業務ロジック、非同期処理、スケジュール実行など）が絡む場合は、単一のマネージドサービスの組み合わせではなく、Google Cloudの各サービスを組み合わせる方針が示されています。</p>
+      <div class="example">
+        <h3>具体例</h3>
+        <p>Cloud Run（コンテナ実行）、Cloud SQL（リレーショナルDB）、Memorystore（キャッシュ）、Cloud Tasks（非同期タスクキュー）、Cloud Scheduler（定期実行）、Cloud Storage（オブジェクトストレージ）といった要素を組み合わせることで、個人開発向けの軽量な構成では対応しきれない、複雑な業務要件（例: 複数の非同期処理が絡む業務システム）に対応できます。</p>
+      </div>
+      <div class="key-point">
+        <strong>判断の軸:</strong> 「個人開発の延長で作れる複雑さ」を超えたら、無理に軽量な構成にこだわらず、フルマネージドなクラウドサービス群への切り替えを検討する。
+      </div>
+    </section>
+
+    <section class="section" id="comparison">
+      <h2>全体の意思決定フロー早見表</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>要素</th>
+              <th>最初に検討すべき選択肢</th>
+              <th>次に検討する選択肢</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>サイトの種類</td>
+              <td>静的サイト（React+Vite/Next.js Static Export/Astro）</td>
+              <td>サーバーが必要ならTanStack Start / Vercel / OpenNext</td>
+            </tr>
+            <tr>
+              <td>DB</td>
+              <td>D1 / Durable Objects（Cloudflare前提）</td>
+              <td>Postgres/MySQLが必要ならSupabase / Neon / PlanetScale</td>
+            </tr>
+            <tr>
+              <td>ストレージ</td>
+              <td>R2</td>
+              <td>重要データはS3/GCS（バージョニング）や併用バックアップ</td>
+            </tr>
+            <tr>
+              <td>メール</td>
+              <td>Resend（少量）</td>
+              <td>大量ならSES、Workers前提ならCloudflare Email Service</td>
+            </tr>
+            <tr>
+              <td>複雑さの限界を超えたら</td>
+              <td>個人開発向けマネージドサービスの組み合わせ</td>
+              <td>Google Cloudの各サービスを組み合わせる構成</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" id="decision">
+      <h2>自分のサービスに当てはめる手順</h2>
+      <ol class="steps">
+        <li>作りたいサービスが「静的に作り切れるか」「ログイン・動的処理が必要か」を最初に判断する。</li>
+        <li>動的処理が必要な場合、規模（小規模〜大規模）と、開発スピード・コストのどちらを優先するかを決める。</li>
+        <li>DBが必要な場合、Cloudflareで完結させたいか、Postgres/MySQLが必須かを判断する。国内向けサービスならリージョン（レイテンシ）も確認する。</li>
+        <li>ストレージは、データが消えたときの被害の大きさから、単一クラウドで良いか、バックアップを併用すべきかを決める。</li>
+        <li>メール配信・認証・決済・アクセス制御など、コア機能でない部分は既存サービスで済ませられないかを先に検討する。</li>
+        <li>個人開発の枠を超える複雑さが見えてきたら、無理をせずGoogle Cloudなどのフルマネージド構成への切り替えを検討する。</li>
+      </ol>
+    </section>
+
+    <section class="section" id="summary">
+      <h2>まとめ・次のステップ</h2>
+      <p>個人Webサービスの技術選定は、「静的か動的か」「規模」「コスト対スピード」「データが消えたときの被害」という少数の判断軸の組み合わせで、多くのケースを整理できます。元投稿の各選択肢（Cloudflare Workers系、Postgres系DB、メール配信サービスなど）は、それぞれ特定の課題（コスト、レイテンシ、運用の手間）を解決するために選ばれており、単に「流行っているから」選ばれているわけではありません。</p>
+      <p>一方で元投稿の最後にもある通り、「結局サービスの内容によって変わる」というのも重要な指摘です。このフローチャートは出発点の目安として使い、実際に作りたいサービスの要件（想定ユーザー数、予算、開発に割ける時間、データの重要度など）に照らして、AIやドキュメントに相談しながら最終的な選択を調整することをおすすめします。次のステップとしては、自分が作りたいサービスを1つ思い浮かべ、このフローチャートに沿って「静的サイト／サーバー要否／DB／ストレージ／メール」をそれぞれ仮決めしてみることをおすすめします。</p>
+    </section>
+
+    <section class="section references" id="references">
+      <h2>参照資料</h2>
+      <ul>
+        <li><a href="https://x.com/catnose99/status/2079777959167340607">個人的Webサービスを作るときの構成 2026</a>（catnose, X）</li>
+        <li><a href="https://developers.cloudflare.com/changelog/post/2026-04-16-email-sending-public-beta/">Email Sending now in public beta | Cloudflare Changelog</a></li>
+        <li><a href="https://planetscale.com/blog/planetscale-for-postgres-is-generally-available">PlanetScale for Postgres is now GA | PlanetScale</a></li>
+        <li><a href="https://opennext.js.org/cloudflare">OpenNext for Cloudflare</a></li>
+        <li><a href="https://neon.com/docs/introduction/regions">Regions | Neon Docs</a></li>
+        <li><a href="https://www.twilio.com/en-us/changelog/sendgrid-free-plan">Changes coming to SendGrid's Free Plan | Twilio</a></li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>
