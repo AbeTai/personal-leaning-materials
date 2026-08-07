@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ナレッジグラフとLLMの相互利用</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="hero">
+    <div class="wrap">
+      <a class="back-link" href="../">教材一覧へ</a>
+      <p class="eyebrow">Knowledge Graph &amp; LLM</p>
+      <h1>ナレッジグラフとLLMの相互利用</h1>
+      <p class="lead">RDF・SPARQL・オントロジーというセマンティック技術の基礎から、ナレッジグラフとLLMが競合ではなく補完し合う6つの相互利用形態、そしてGraph RAGの仕組みまでを整理する教材です。</p>
+      <dl class="meta">
+        <div>
+          <dt>対象</dt>
+          <dd>グラフDB・ナレッジグラフの基礎（ノード・エッジ、活用事例）は学習済みで、RDF/SPARQLやLLMとの組み合わせ方を知りたい方</dd>
+        </div>
+        <div>
+          <dt>作成日</dt>
+          <dd>2026-08-07</dd>
+        </div>
+        <div>
+          <dt>元資料</dt>
+          <dd><a href="https://speakerdeck.com/koujikozaki/naretuzigurahutollmnoxiang-hu-li-yong">ナレッジグラフとLLMの相互利用（古崎晃司, 大阪電気通信大学）</a></dd>
+        </div>
+      </dl>
+    </div>
+  </header>
+
+  <main class="wrap content">
+    <section class="section" id="goals">
+      <h2>この教材で学べること</h2>
+      <div class="goal-grid">
+        <article>
+          <h3>RDF・SPARQL・オントロジーの基礎</h3>
+          <p>ナレッジグラフを支えるセマンティック技術の具体的な記法と役割を理解します。</p>
+        </article>
+        <article>
+          <h3>KGとLLMの6つの相互利用形態</h3>
+          <p>性能比較からGraph RAG、LLMによるKG自動構築まで、両者の組み合わせ方を整理します。</p>
+        </article>
+        <article>
+          <h3>Graph RAGの技術的な仕組み</h3>
+          <p>Microsoft GraphRAGのコミュニティ検出など、実装レベルの考え方に触れます。</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="prerequisites">
+      <h2>前提知識の確認</h2>
+      <ul class="check-list">
+        <li>グラフDB・ナレッジグラフの基本構造（ノード・エッジ）が分かる（<a href="../2026-07-21_semantic-ontology-knowledge-graph/">前回教材「セマンティック概論」</a>を参照）</li>
+        <li>URLやURIといったWebの基本的な仕組みを知っている</li>
+        <li>RAG（Retrieval-Augmented Generation）が「生成AIに外部知識を検索して与える手法」であることを知っている</li>
+      </ul>
+      <p>前回の教材でグラフDB・オントロジーの概念には触れましたが、今回はそれを支える具体的な記法（RDF・SPARQL）と、LLMとの組み合わせ方（特にGraph RAG）に踏み込みます。</p>
+    </section>
+
+    <section class="section" id="roadmap">
+      <h2>学習ロードマップ</h2>
+      <ol class="roadmap">
+        <li>
+          <span>Phase 1</span>
+          <strong>RDF・Linked Data・SPARQLの基礎を理解する</strong>
+          <p>ナレッジグラフがどのようなデータモデルで表現され、どう検索されるのかを具体例で確認します。</p>
+        </li>
+        <li>
+          <span>Phase 2</span>
+          <strong>オントロジーの役割とKGQAの仕組みを理解する</strong>
+          <p>語彙の統一という役割と、説明可能な質問応答という強みを確認します。</p>
+        </li>
+        <li>
+          <span>Phase 3</span>
+          <strong>KGとLLMの6つの相互利用形態を整理する</strong>
+          <p>性能比較・ファクトチェックから、Graph RAG、LLMによるKG自動構築までを一通り確認します。</p>
+        </li>
+        <li>
+          <span>Phase 4</span>
+          <strong>Graph RAGの技術的な仕組みを深掘りする</strong>
+          <p>Microsoft GraphRAGのコミュニティ検出など、実装上の考え方に触れます。</p>
+        </li>
+      </ol>
+    </section>
+
+    <section class="section concept" id="rdf-sparql">
+      <p class="section-label">Concept 1</p>
+      <h2>RDF・Linked Data・SPARQLの基礎</h2>
+      <p>ナレッジグラフは多くの場合、RDF（Resource Description Framework）というデータモデルで表現されます。RDFは「主語-述語-目的語」のトリプル（3つ組み）でグラフ構造を表現します。</p>
+      <div class="example">
+        <h3>具体例：大阪電気通信大学のトリプル</h3>
+        <ul class="check-list">
+          <li>主語: 大阪電気通信大学（URI: <code>http://www.wikidata.org/entity/Q7105556</code>）</li>
+          <li>述語: 設立日、位置する行政区、国、職業（分類）など</li>
+          <li>目的語: 1941年（リテラル）、寝屋川市（リソース）、日本（リソース）、大学（分類）</li>
+        </ul>
+        <p>このように「主語→述語→目的語」の3つ組みを大量に集めることで、エンティティ同士のつながりがグラフとして表現されます。Linked Data（LD）は、このRDFをURI/URLというWebの仕組みで相互接続する考え方で、オープンな形式で公開されたものをLinked Open Data（LOD）と呼びます。Wikidata・DBpediaはLODの代表例です。</p>
+      </div>
+      <p>RDFで表現されたグラフを検索する言語がSPARQLです。Wikidataから「日本の政治家の出身都道府県ランキング」を取得するクエリは次のようになります。</p>
+      <pre><code>SELECT ?pref ?prefLabel (count(?s) As ?c) WHERE {
+  ?pref wdt:P31 wd:Q50337;  #分類＝都道府県
+  wdt:P429 ?code.
+  ?s wdt:P27 wd:Q17;  #国籍＝日本
+  wdt:P106 wd:Q82955;  #職業＝政治家
+  wdt:P19/wdt:P131* ?pref.  #出身
+  SERVICE wikibase:label {
+    bd:serviceParam wikibase:language "[AUTO_LANGUAGE],en"
+  }
+}
+GROUP BY ?pref ?prefLabel ORDER BY DESC(?c)</code></pre>
+      <p>職業条件を「内閣総理大臣」に絞りたい場合、<code>wdt:P39 wd:Q274948;</code>という1行を追加するだけで検索対象を変更できます。</p>
+      <div class="key-point">
+        <strong>判断の軸:</strong> SPARQLは「主語-述語-目的語」というトリプルのパターンを条件式として並べる言語であり、SQLの「テーブルの行を絞り込む」発想とは異なり「グラフ上のパスのパターンに一致するものを探す」発想で書く。
+      </div>
+      <div class="quiz">
+        <h3>理解チェック</h3>
+        <p>上のSPARQLクエリで、検索条件を「内閣総理大臣」に絞り込むために1行追加するだけで済んでいるのは、RDFのどのような性質（トリプルという表現形式）のおかげだと考えられますか。</p>
+      </div>
+    </section>
+
+    <section class="section concept" id="ontology-role">
+      <p class="section-label">Concept 2</p>
+      <h2>オントロジーの役割：語彙の統一と意味の明確化</h2>
+      <p>オントロジーは「対象世界をどのように捉えたか（概念化したか）」を、計算機と人間が共有できる形で明確化・体系化したものです。前回の教材では統制語彙の一種として位置づけましたが、ナレッジグラフの文脈では次の3つの機能が強調されます。</p>
+      <ol class="steps">
+        <li>ナレッジグラフの記述に用いる語彙（分類や関係の種類）を提供する</li>
+        <li>概念同士の共通性と相違点（意味）を明確にする</li>
+        <li>統一した語彙により、複数のナレッジグラフ間で知識の統合・相互利用を可能にする</li>
+      </ol>
+      <div class="example">
+        <h3>具体例：車両の概念化</h3>
+        <p>単に「二輪車、自動二輪、自転車」と分類を列挙するだけの概念階層と、次のように定義を加えた概念階層を比較します。</p>
+        <ul class="check-list">
+          <li>二輪車 → 車輪の数＝2</li>
+          <li>自動二輪 → 動力源＝エンジン</li>
+          <li>自転車 → 動力源＝人</li>
+        </ul>
+        <p>後者は各概念の意味の違いが明示化されているため、システムが「動力源で絞り込む」「車輪の数で絞り込む」といった正確な処理をできるようになります。単なる分類名の列挙と、定義を伴うオントロジーの違いがここに表れています。</p>
+      </div>
+      <div class="key-point">
+        <strong>判断の軸:</strong> オントロジーが整備されているかどうかは、「分類名が並んでいるだけか」「その分類がなぜ・どう違うのかという定義まで書かれているか」で見分けられる。
+      </div>
+    </section>
+
+    <section class="section concept" id="kgqa">
+      <p class="section-label">Concept 3</p>
+      <h2>KGQA：説明可能な質問応答の仕組み</h2>
+      <p>KGQA（Knowledge Graph Question Answering）は、自然言語の質問に対してナレッジグラフを検索して回答する仕組みです。動作は次の流れになります。</p>
+      <ol class="steps">
+        <li>質問の意図を解析する</li>
+        <li>質問に対応する適切なエンティティ・プロパティを同定する</li>
+        <li>グラフトラバーサル（リソース間のリンクをたどる）を行う</li>
+        <li>結果を抽出し、自然言語化して回答する</li>
+      </ol>
+      <div class="example">
+        <h3>具体例</h3>
+        <ul class="check-list">
+          <li>「『天気の子』の監督は？」→「『新海誠』です」</li>
+          <li>「『大阪電気通信大学』の所在地は？」→「『寝屋川市』です」</li>
+        </ul>
+      </div>
+      <p>KGQAの強みは、回答の根拠となったグラフ上のパス（どのトリプルをたどって回答に至ったか）を明示できる「説明可能性」にあります。これは、LLMが抱えるハルシネーション（もっともらしい誤情報の生成）や、回答の根拠が暗黙的である（なぜその回答に至ったか説明しづらい）という課題を補う関係にあります。</p>
+      <div class="key-point">
+        <strong>判断の軸:</strong> 「なぜその回答なのか」を明示する必要がある用途（事実確認、監査対応など）ではKGQAの説明可能性が活き、「自然な文章での応答」が重要な用途ではLLMの生成力が活きる。この住み分けが、次のConceptで扱う「相互利用」の出発点になる。
+      </div>
+    </section>
+
+    <section class="section concept" id="kg-vs-llm">
+      <p class="section-label">Concept 4</p>
+      <h2>相互利用形態①②：性能比較とファクトチェック</h2>
+      <p>KGとLLMの相互利用には6つの形態がありますが、まず最も直接的な2つ（性能比較・ファクトチェック）を見ます。</p>
+      <div class="example">
+        <h3>① KG vs. LLM（性能比較）</h3>
+        <p>同一タスクでの両者の性能を比較します。例えば大阪電気通信大学のキャンパス所在地について、Wikidataは正確に「寝屋川・四條畷」と答えましたが、あるLLM（ChatGPT 4o mini）は「枚方市には無い」と誤り、より新しいモデル（ChatGPT 4）はより正確な補足ができました。KGQA研究ではF1スコアで0.5〜0.9、Accuracyで0.2〜0.9など、タスクによって性能差が報告されています。</p>
+      </div>
+      <div class="example">
+        <h3>② LLM for KG（KGを用いたLLMのファクトチェック）</h3>
+        <p>KGから得た事実情報と、LLMの生成内容を比較検証します。日本の大学798件など18,167インスタンスを対象に、Wikidataの事実とChatGPT3.5の回答を比較した大規模調査では、一致率が0.6〜32.7%と領域によって大きくばらつく結果になりました。</p>
+      </div>
+      <div class="key-point">
+        <strong>判断の軸:</strong> LLM単体の回答をそのまま信頼するのではなく、KGという「検証可能な正解データ」と突き合わせることで、LLMがどの領域で誤りやすいかを定量的に把握できる。
+      </div>
+      <div class="quiz">
+        <h3>理解チェック</h3>
+        <p>ファクトチェックの一致率が「領域によって0.6〜32.7%と大きくばらつく」という結果は、LLMを業務で使う際にどのような教訓を示唆していると考えられますか。</p>
+      </div>
+    </section>
+
+    <section class="section concept" id="graph-rag">
+      <p class="section-label">Concept 5</p>
+      <h2>相互利用形態④：Graph RAG（KGをLLMの外部知識にする）</h2>
+      <p>最も実装事例が多いのが、KGをLLMの外部知識として使うGraph RAGです。基本的な流れは、質問文→①KGで検索→②（必要なら）LLMでも検索→③KG/LLMの結果を組み合わせる→④最終回答を生成する、というものです。実装時には次の4つの技術要素を決める必要があります。</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>技術要素</th>
+              <th>選択肢</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>使用するKG</td>
+              <td>既存KG（Wikidata、DBpedia等のLOD）か、独自KG（手作業構築、DB変換、テキストからの抽出）か</td>
+            </tr>
+            <tr>
+              <td>KGの検索方法</td>
+              <td>グラフパターン一致（SPARQL、Cypher等）、グラフ構造の探索と距離計算、グラフ埋め込み（ベクトル化）による類似判定</td>
+            </tr>
+            <tr>
+              <td>KGとLLMの組み合わせ方法</td>
+              <td>検索結果の比較・総合判定、KG検索結果からプロンプト生成、KG検索結果をテキスト化してLLM入力、ベクトル化して統合（RAG等）</td>
+            </tr>
+            <tr>
+              <td>使用ツール</td>
+              <td>クエリ言語（SPARQL、Cypher）、RDF DB（Apache Jena Fuseki、Virtuoso等）、グラフDB（Neo4j、Amazon Neptune）、Graph RAG実装（LangChain+Neo4j、Microsoft GraphRAG等）</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="key-point">
+        <strong>判断の軸:</strong> 「既存のオープンなKGで足りるか、自社データから独自KGを作る必要があるか」「検索は正確なパターン一致で十分か、ベクトル類似検索も併用すべきか」という2つの問いが、Graph RAGの実装方針を大きく左右する。
+      </div>
+    </section>
+
+    <section class="section concept" id="microsoft-graphrag">
+      <p class="section-label">Concept 5-2</p>
+      <h2>Microsoft GraphRAGの仕組み：コミュニティ検出</h2>
+      <p>Graph RAGのツールとして挙げられているMicrosoft GraphRAGは、テキストからLLMでエンティティ・関係を抽出してグラフを作り、そのグラフに対してLeiden法というコミュニティ検出アルゴリズムを適用します。Leiden法は、Louvain法という既存手法を改良したもので、意味的にまとまったエンティティ群（いわば「トピック」）をグラフから見つけ出します。</p>
+      <div class="example">
+        <h3>階層的なコミュニティ検出</h3>
+        <p>このコミュニティ検出は階層的に行われます。まず元のグラフ（Level 0）でコミュニティを検出し、次にそのコミュニティ同士を1つのノードとみなして再びLeiden法を適用し、より大きなコミュニティ（Level 1）を見つける、という処理を繰り返します。この階層構造のおかげで、「特定の詳細な質問に答えるローカル検索」（グラフの細かいレベルを参照）と、「広い概観を答えるグローバル検索」（グラフの粗いレベル＝大きなコミュニティを参照）の両方に対応できます。</p>
+      </div>
+      <div class="key-point">
+        <strong>判断の軸:</strong> 「この資料全体を要約して」のような広い質問にはグローバル検索（粗いコミュニティ）、「このエンティティの詳細は」のような狭い質問にはローカル検索（細かいコミュニティ）が向く。質問の粒度に応じて参照する階層レベルを変える、という発想がGraphRAGの核心。
+      </div>
+      <div class="quiz">
+        <h3>理解チェック</h3>
+        <p>単純なベクトル検索によるRAG（文書をチャンクに分けてベクトル化するだけの方式）と比べて、Graph RAGのコミュニティ検出はどのような質問に強いと考えられますか。「複数の文書・エンティティにまたがる関係性についての質問」という観点から考えてください。</p>
+      </div>
+    </section>
+
+    <section class="section concept" id="kg-for-llm-and-build">
+      <p class="section-label">Concept 6</p>
+      <h2>相互利用形態③⑤⑥：LLM学習への活用、自然言語インターフェース、KGの自動構築</h2>
+      <p>残る3つの形態は、Graph RAGほど実装事例は多くありませんが、それぞれ異なる方向性を示しています。</p>
+      <div class="example">
+        <h3>③ LLM学習にKGを利用</h3>
+        <p>ナレッジグラフを使って、言語モデルの学習に使うテキストそのものを生成するアプローチです。事実関係が正確なKGを元に学習データを作ることで、モデルの知識の正確性を高める狙いがあります。</p>
+      </div>
+      <div class="example">
+        <h3>⑤ KG for LLM（LLMをKG利用のインターフェースにする）</h3>
+        <p>方向性はGraph RAGとは逆で、KGを検索するために必要なクエリ（SPARQL等）をLLMに自然言語から生成させたり、KGの検索結果（トリプルの羅列）をLLMで読みやすい自然な文章に変換したりする使い方です。「KGは正確だが人間には読みにくい」という弱点を、LLMの文章生成力で補います。</p>
+      </div>
+      <div class="example">
+        <h3>⑥ LLMを用いたKG/オントロジーの自動構築</h3>
+        <p>Text2KGBenchでは、テキストからオントロジーに基づいたナレッジグラフを自動構築し評価する取り組みが行われています。オントロジー学習（OL）では、LLMにZero-Shotプロンプティングを行い、「用語の分類」「分類の発見」「非分類関係の抽出」といった主要タスクを評価します。これは、Concept 2で見た「意味の明確化」というオントロジーの役割を、人手ではなくLLMに担わせる試みです。</p>
+      </div>
+      <div class="key-point">
+        <strong>判断の軸:</strong> KGとLLMの相互利用は「KGを使ってLLMを良くする」方向（①②③）と、「LLMを使ってKGを使いやすく・作りやすくする」方向（⑤⑥）の両方があり、Graph RAG（④）はその中間で両者を組み合わせる位置づけになる。
+      </div>
+    </section>
+
+    <section class="section" id="comparison">
+      <h2>KGとLLMの相互利用6形態 早見表</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>形態</th>
+              <th>方向性</th>
+              <th>主な目的</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>① KG vs. LLM</td>
+              <td>比較</td>
+              <td>同一タスクでの性能差を定量的に把握する</td>
+            </tr>
+            <tr>
+              <td>② LLM for KG（ファクトチェック）</td>
+              <td>KGでLLMを検証</td>
+              <td>LLMの生成内容の正確性をKGと突き合わせて確認する</td>
+            </tr>
+            <tr>
+              <td>③ LLM学習にKGを利用</td>
+              <td>KGでLLMを強化</td>
+              <td>KGを元にした学習データでLLMの知識の正確性を高める</td>
+            </tr>
+            <tr>
+              <td>④ KGをLLMの外部知識に（Graph RAG）</td>
+              <td>KGとLLMの統合</td>
+              <td>検索した事実情報をもとにLLMが根拠のある回答を生成する</td>
+            </tr>
+            <tr>
+              <td>⑤ KG for LLM（自然言語インターフェース）</td>
+              <td>LLMでKGを使いやすく</td>
+              <td>自然言語でKGを検索し、結果を読みやすい文章にする</td>
+            </tr>
+            <tr>
+              <td>⑥ LLMでKG構築</td>
+              <td>LLMでKGを作りやすく</td>
+              <td>テキストから自動的にオントロジー・ナレッジグラフを構築する</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" id="decision">
+      <h2>適用判断の手順</h2>
+      <ol class="steps">
+        <li>回答の正確性・説明可能性が重要な用途か、自然な文章生成が重要な用途かを見極める。</li>
+        <li>信頼できる既存のKG（Wikidata等）で足りるか、自社データから独自KGを構築する必要があるかを判断する。</li>
+        <li>質問の粒度（狭い詳細質問か、広い概観質問か）に応じて、グラフの検索方法（パターン一致かコミュニティ検出のような階層検索か）を選ぶ。</li>
+        <li>KGがまだ整備されていない場合、LLMによる自動構築（形態⑥）で最初の土台を作れないか検討する。</li>
+        <li>実装したら、KG vs. LLMの性能比較やファクトチェック（形態①②）で、実際にどれだけ精度が改善したかを定量的に確認する。</li>
+      </ol>
+    </section>
+
+    <section class="section" id="summary">
+      <h2>まとめ・次のステップ</h2>
+      <p>ナレッジグラフとLLMは、しばしば対立する技術のように語られますが、この教材で見たISWC2023のキーノート主張の通り「LLMはKGに取って代わるものではなく、補完的な利用が可能」というのが現在の主流の理解です。KGは「説明可能性・正確性」に強く、LLMは「自然言語理解・生成力」に強いという、異なる強みを持っています。6つの相互利用形態は、この2つの強みをどちらからどちらへ、どのように組み合わせるかという整理であり、特にGraph RAGはその中でも最も実装が進んでいる領域です。</p>
+      <p>次のステップとしては、Wikidata Query ServiceでSPARQLクエリを実際に実行してみること、そして自分の業務データの中でKGとして構造化すると価値が出そうな情報（前回の教材で考えた「ノードとエッジ」の題材）があれば、それをMicrosoft GraphRAGやLangChain+Neo4jのようなツールでLLMと組み合わせる構成を検討してみることをおすすめします。</p>
+    </section>
+
+    <section class="section references" id="references">
+      <h2>参照資料</h2>
+      <ul>
+        <li><a href="https://speakerdeck.com/koujikozaki/naretuzigurahutollmnoxiang-hu-li-yong">ナレッジグラフとLLMの相互利用</a>（古崎晃司, 大阪電気通信大学, 2024-09-12）</li>
+        <li><a href="https://arxiv.org/abs/2404.16130">From Local to Global: A Graph RAG Approach to Query-Focused Summarization</a></li>
+        <li><a href="https://github.com/microsoft/graphrag">microsoft/graphrag (GitHub)</a></li>
+        <li><a href="../2026-07-21_semantic-ontology-knowledge-graph/">（本サイト内）セマンティック概論：オントロジー・グラフDB・ナレッジグラフとAIエージェント時代のデータ整備</a></li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>
